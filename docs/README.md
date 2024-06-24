@@ -48,6 +48,5 @@ cd PolarCam
 
 ## Author
 
-Daping Xu
-
+Daping Xu  
 daping.xu@physics.ox.ac.uk
