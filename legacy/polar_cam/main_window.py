@@ -1,17 +1,14 @@
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel,
-    QLineEdit, QHBoxLayout, QDockWidget, QFormLayout, QGroupBox,
-    QMessageBox, QStatusBar, QFileDialog, QScrollArea, QGraphicsView
+    QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit,
+    QHBoxLayout, QDockWidget, QFormLayout, QGroupBox, QMessageBox,
+    QStatusBar, QFileDialog, QScrollArea, QApplication
 )
 from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import QImage
 import cv2
 import numpy as np
 import time
-from camera_control import CameraControl
-from image_processor import ImageProcessor
-from image_display import Display
-from data_analyzer import DataAnalyzer
+from polar_cam.image_display import Display
+from polar_cam.utils import adjust_for_increment
 
 class MainWindow(QMainWindow):
     def __init__(self, camera_control, image_processor, data_analyzer):
@@ -19,6 +16,7 @@ class MainWindow(QMainWindow):
         self.camera_control = camera_control
         self.image_processor = image_processor
         self.data_analyzer = data_analyzer
+
         self.is_recording = False
         self.spots = []
         self.recorded_frames = []
@@ -29,6 +27,13 @@ class MainWindow(QMainWindow):
         self.original_settings = None
         self.current_spot_id = None
         self.processor = None
+
+        self.init_camera_parameters()
+        self.setup_ui()
+        self.connect_signals()
+        self.adjust_to_screen_size()
+
+    def init_camera_parameters(self):
         self.min_framerate = None
         self.max_framerate = None
         self.current_framerate = None
@@ -57,12 +62,6 @@ class MainWindow(QMainWindow):
         self.min_digital_gain = None
         self.max_digital_gain = None
         self.current_digital_gain = None
-        self._current_rect_item = None
-        self.recording_timer = QTimer(self)
-        self.recording_timer.timeout.connect(self.stop_spot_recording)
-        self.setup_ui()
-        self.connect_signals()
-        self.adjust_to_screen_size()
 
     def setup_ui(self):
         self.setWindowTitle("Camera Control Interface")
@@ -78,33 +77,27 @@ class MainWindow(QMainWindow):
         self.create_statusbar()
 
         buttons_layout = QHBoxLayout()
+        buttons = [
+            ("Toggle Parameters", self.toggle_parameter_sidebar),
+            ("Start Acquisition", self.toggle_acquisition),
+            ("Start Recording", self.toggle_recording),
+            ("Detect Spots", self.on_detect_spots),
+            ("Scan Spot", self.on_scan_spot)
+        ]
 
-        self.toggle_sidebar_button = QPushButton("Toggle Parameters", self)
-        self.toggle_sidebar_button.clicked.connect(self.toggle_parameter_sidebar)
-        self.toggle_sidebar_button.setFixedSize(150, 30)
-        buttons_layout.addWidget(self.toggle_sidebar_button)        
-        self.start_pause_button = QPushButton("Start Acquisition", self)
-        self.start_pause_button.clicked.connect(self.toggle_acquisition)
-        self.start_pause_button.setFixedSize(150, 30)
-        buttons_layout.addWidget(self.start_pause_button)
-        self.record_button = QPushButton("Start Recording", self)
-        self.record_button.clicked.connect(self.toggle_recording)
-        self.record_button.setFixedSize(150, 30)
-        buttons_layout.addWidget(self.record_button)
-        self.detect_spots_button = QPushButton("Detect Spots", self)
-        self.detect_spots_button.clicked.connect(self.on_detect_spots)
-        self.detect_spots_button.setFixedSize(150, 30)
-        buttons_layout.addWidget(self.detect_spots_button)
-        self.scan_spot_button = QPushButton("Scan Spot", self)
-        self.scan_spot_button.clicked.connect(self.on_scan_spot)
-        self.scan_spot_button.setFixedSize(150, 30)
-        buttons_layout.addWidget(self.scan_spot_button)
+        for label, callback in buttons:
+            button = QPushButton(label, self)
+            button.clicked.connect(callback)
+            button.setFixedSize(150, 30)
+            buttons_layout.addWidget(button)
     
         layout.addLayout(buttons_layout)
 
     def setup_parameter_sidebar(self):
         self.parameter_sidebar = QDockWidget("Parameters", self)
-        self.parameter_sidebar.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.parameter_sidebar.setAllowedAreas(
+            Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
+        )
 
         sidebar_scroll_area = QScrollArea()  
         sidebar_widget = QWidget()
@@ -125,10 +118,14 @@ class MainWindow(QMainWindow):
 
     def adjust_to_screen_size(self):
         screen_geometry = QApplication.primaryScreen().availableGeometry()
-        self.setGeometry(0, 0, screen_geometry.width(), screen_geometry.height())
+        self.setGeometry(
+            0, 0, screen_geometry.width(), screen_geometry.height()
+        )
 
     def toggle_parameter_sidebar(self):
-        self.parameter_sidebar.setVisible(not self.parameter_sidebar.isVisible())
+        self.parameter_sidebar.setVisible(
+            not self.parameter_sidebar.isVisible()
+        )
 
     def create_statusbar(self):
         self.status_bar = QStatusBar()
@@ -155,13 +152,19 @@ class MainWindow(QMainWindow):
             self.recorded_frames = []
 
     def save_recording(self):
-        filepath, _ = QFileDialog.getSaveFileName(self, "Save Video", "", "Video Files (*.avi)")
-            
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Save Video", "", "Video Files (*.avi)"
+        )
+        if not filepath:
+            return
+                    
         height, width = self.recorded_frames[0].shape[:2]
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         fps = round(self.current_framerate, 2)
         
-        video = cv2.VideoWriter(filepath, fourcc, fps, (width, height), isColor=False)
+        video = cv2.VideoWriter(
+            filepath, fourcc, fps, (width, height), isColor=False
+        )
 
         for i, frame in enumerate(self.recorded_frames):            
             video.write(frame)
@@ -173,9 +176,14 @@ class MainWindow(QMainWindow):
             self.recorded_frames.append(np.copy(image_np_array))
             
         if self.is_recording and self.current_spot_id is not None:
-            elapsed_time = time.perf_counter() - self.start_time  # Get elapsed time in seconds with high precision
-            self.spot_frames_storage.setdefault(self.current_spot_id, []).append(np.copy(image_np_array))
-            self.spot_timestamps_storage.setdefault(self.current_spot_id, []).append(elapsed_time)
+            elapsed_time = time.perf_counter() - self.start_time
+            self.spot_frames_storage.setdefault(
+                self.current_spot_id, []
+            ).append(np.copy(image_np_array))
+
+            self.spot_timestamps_storage.setdefault(
+                self.current_spot_id, []
+            ).append(elapsed_time)
 
     def create_framerate_group(self, layout):
         self.framerate_group = QGroupBox("AcquisitionFrameRate")
@@ -278,7 +286,7 @@ class MainWindow(QMainWindow):
         self.min_digital_gain_label = QLabel("Min DigitalGain:")
         self.max_digital_gain_label = QLabel("Max DigitalGain:")
         self.digital_gain_input = QLineEdit()
-        self.digital_gain_input.textChanged.connect(self.validate_gain_input)        
+        self.digital_gain_input.textChanged.connect(self.validate_gain_input)
         self.gain_set_button = QPushButton("Set Gain")
         self.gain_set_button.clicked.connect(self.on_apply_gain)
 
@@ -302,7 +310,9 @@ class MainWindow(QMainWindow):
         self.num_sigma_input = QLineEdit("10")
         self.threshold_input = QLineEdit("0.3")
         self.reset_spot_detection_button = QPushButton("Reset to Defaults")
-        self.reset_spot_detection_button.clicked.connect(self.reset_spot_detection_parameters)
+        self.reset_spot_detection_button.clicked.connect(
+            self.reset_spot_detection_parameters
+        )
 
         form_layout.addRow("Min Sigma", self.min_sigma_input)
         form_layout.addRow("Max Sigma", self.max_sigma_input)
@@ -316,9 +326,16 @@ class MainWindow(QMainWindow):
     def on_apply_framerate(self):
         try:
             input_framerate = float(self.framerate_input.text())
-            self.camera_control.set_parameters({"AcquisitionFrameRate": {"current": input_framerate}})
+            self.camera_control.set_parameters(
+                {"AcquisitionFrameRate": {"current": input_framerate}}
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Error Setting AcquisitionFrameRate", str(e), QMessageBox.Ok)
+            QMessageBox.critical(
+                self, 
+                "Error Setting AcquisitionFrameRate", 
+                str(e), 
+                QMessageBox.Ok
+            )
 
     def validate_framerate_input(self):
         self.framerate_set_button.setEnabled(False)
@@ -328,7 +345,9 @@ class MainWindow(QMainWindow):
 
         try:
             input_framerate = float(self.framerate_input.text())
-            is_framerate_valid = self.min_framerate <= input_framerate <= self.max_framerate
+            is_framerate_valid = (
+                self.min_framerate <= input_framerate <= self.max_framerate
+            )
 
             is_decimal_valid = True
             if "." in self.framerate_input.text():
@@ -344,9 +363,13 @@ class MainWindow(QMainWindow):
         try:
             input_exposure = float(self.exposure_input.text())
             input_exposure_us = input_exposure * 1000
-            self.camera_control.set_parameters({"ExposureTime": {"current": input_exposure_us}})
+            self.camera_control.set_parameters(
+                {"ExposureTime": {"current": input_exposure_us}}
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Error Setting ExposureTime", str(e), QMessageBox.Ok)
+            QMessageBox.critical(
+                self, "Error Setting ExposureTime", str(e), QMessageBox.Ok
+            )
 
     def validate_exposure_input(self):
         self.exposure_set_button.setEnabled(False)
@@ -356,7 +379,9 @@ class MainWindow(QMainWindow):
 
         try:
             input_exposure = float(self.exposure_input.text())
-            is_exposure_valid = self.min_exposure <= input_exposure <= self.max_exposure
+            is_exposure_valid = (
+                self.min_exposure <= input_exposure <= self.max_exposure
+            )
 
             is_decimal_valid = True
             if "." in self.exposure_input.text():
@@ -373,8 +398,8 @@ class MainWindow(QMainWindow):
             w = int(self.w_input.text())
             h = int(self.h_input.text())
             
-            adjusted_w = self.adjust_for_increment(w, self.inc_w, self.max_w)
-            adjusted_h = self.adjust_for_increment(h, self.inc_h, self.max_h)
+            adjusted_w = adjust_for_increment(w, self.inc_w, self.max_w)
+            adjusted_h = adjust_for_increment(h, self.inc_h, self.max_h)
             
             self.w_input.setText(str(adjusted_w))
             self.h_input.setText(str(adjusted_h))
@@ -384,12 +409,19 @@ class MainWindow(QMainWindow):
                 "Height": {"current": adjusted_h}
             })
         except Exception as e:
-            QMessageBox.critical(self, "Error Setting ROI", str(e), QMessageBox.Ok)
+            QMessageBox.critical(
+                self, "Error Setting ROI", str(e), QMessageBox.Ok
+            )
 
     def validate_roi_input(self):
         self.roi_set_button.setEnabled(False)
 
-        if any(value is None for value in [self.min_w, self.max_w, self.inc_w, self.min_h, self.max_h, self.inc_h]):
+        if any(
+            value is None for value in [
+                self.min_w, self.max_w, self.inc_w,
+                self.min_h, self.max_h, self.inc_h
+            ]
+        ):
             return
 
         try:
@@ -408,8 +440,8 @@ class MainWindow(QMainWindow):
             x = int(self.x_input.text())
             y = int(self.y_input.text())
             
-            adjusted_x = self.adjust_for_increment(x, self.inc_x, self.max_x)
-            adjusted_y = self.adjust_for_increment(y, self.inc_y, self.max_y)
+            adjusted_x = adjust_for_increment(x, self.inc_x, self.max_x)
+            adjusted_y = adjust_for_increment(y, self.inc_y, self.max_y)
             
             self.x_input.setText(str(adjusted_x))
             self.y_input.setText(str(adjusted_y))
@@ -419,12 +451,17 @@ class MainWindow(QMainWindow):
                 "OffsetY": {"current": adjusted_y}
             })
         except Exception as e:
-            QMessageBox.critical(self, "Error Setting ROI offset", str(e), QMessageBox.Ok)
+            QMessageBox.critical(
+                self, "Error Setting ROI offset", str(e), QMessageBox.Ok
+            )
 
     def validate_roi_offset_input(self):
         self.roi_offset_set_button.setEnabled(False)
 
-        if any(value is None for value in [self.min_x, self.max_x, self.inc_x, self.min_y, self.max_y, self.inc_y]):
+        if any(value is None for value in [
+            self.min_x, self.max_x, self.inc_x, 
+            self.min_y, self.max_y, self.inc_y
+        ]):
             return
 
         try:
@@ -448,44 +485,48 @@ class MainWindow(QMainWindow):
                 "DigitalGain": {"current": input_digital_gain}
             })
         except Exception as e:
-            QMessageBox.critical(self, "Error Setting Gain", str(e), QMessageBox.Ok)
+            QMessageBox.critical(
+                self, "Error Setting Gain", str(e), QMessageBox.Ok
+            )
 
     def validate_gain_input(self):
         self.gain_set_button.setEnabled(False)
         
-        if self.min_analog_gain is None or self.max_analog_gain is None or self.min_digital_gain is None or self.max_digital_gain is None:
+        if (self.min_analog_gain is None or self.max_analog_gain is None or 
+            self.min_digital_gain is None or self.max_digital_gain is None):
             return
         
         try:
             input_analog_gain = float(self.analog_gain_input.text())
             input_digital_gain = float(self.digital_gain_input.text())
             
-            is_analog_valid = self.min_analog_gain <= input_analog_gain <= self.max_analog_gain
-            is_digital_valid = self.min_digital_gain <= input_digital_gain <= self.max_digital_gain
+            is_analog_valid = (
+                self.min_analog_gain <= input_analog_gain 
+                <= self.max_analog_gain
+            )
+            is_digital_valid = (
+                self.min_digital_gain <= input_digital_gain 
+                <= self.max_digital_gain
+            )
             
             is_analog_decimal_valid = True
             is_digital_decimal_valid = True
             if "." in self.analog_gain_input.text():
-                fraction_part_analog = self.analog_gain_input.text().split(".")[1]
+                fraction_part_analog = (
+                    self.analog_gain_input.text().split(".")[1]
+                )
                 is_analog_decimal_valid = len(fraction_part_analog) <= 2
             if "." in self.digital_gain_input.text():
-                fraction_part_digital = self.digital_gain_input.text().split(".")[1]
+                fraction_part_digital = (
+                    self.digital_gain_input.text().split(".")[1]
+                )
                 is_digital_decimal_valid = len(fraction_part_digital) <= 2
             
-            if is_analog_valid and is_digital_valid and is_analog_decimal_valid and is_digital_decimal_valid:
+            if (is_analog_valid and is_digital_valid and 
+                is_analog_decimal_valid and is_digital_decimal_valid):
                 self.gain_set_button.setEnabled(True)
         except ValueError:
             pass
-
-    def adjust_for_increment(self, value, increment, max_value):
-        if value % increment == 0:
-            return value
-        else:
-            rounded_value = round(value / increment) * increment
-            if rounded_value > max_value:
-                return rounded_value - increment
-            else:
-                return rounded_value
 
     def on_detect_spots(self):
         self.spots.clear()
@@ -498,14 +539,18 @@ class MainWindow(QMainWindow):
             num_sigma = int(self.num_sigma_input.text())
             threshold = float(self.threshold_input.text())
         except ValueError as e:
-            QMessageBox.critical(self, "Parameter Error", f"Invalid parameter values: {e}")
+            QMessageBox.critical(
+                self, "Parameter Error", f"Invalid parameter values: {e}"
+            )
             return
 
-        self.processor = ImageProcessor(min_sigma=min_sigma, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+        self.image_processor.min_sigma = min_sigma
+        self.image_processor.max_sigma = max_sigma
+        self.image_processor.num_sigma = num_sigma
+        self.image_processor.threshold = threshold
 
         image = self.camera_control.get_current_frame()
-
-        self.spots = self.processor.detect_spots(image)
+        self.spots = self.image_processor.detect_spots(image)
 
     def reset_spot_detection_parameters(self):
         self.min_sigma_input.setText("10")
@@ -515,7 +560,10 @@ class MainWindow(QMainWindow):
 
     def on_scan_spot(self):
         if not hasattr(self, 'processor') or not self.processor.spots:
-            QMessageBox.warning(self, "Warning", "No spots detected or spot detection not yet performed.")
+            QMessageBox.warning(
+                self, "Warning", 
+                "No spots detected or spot detection not yet performed."
+            )
             return
 
         self.original_settings = self.save_original_camera_settings()
@@ -526,7 +574,9 @@ class MainWindow(QMainWindow):
         if self.spots_to_process:
             spot = self.spots_to_process.pop(0)
             print(f"Processing spot: {spot}")
-            QTimer.singleShot(100, lambda: self.start_spot_recording(spot['id']))
+            QTimer.singleShot(
+                100, lambda: self.start_spot_recording(spot['id'])
+            )
         else:
             self.restore_camera_settings(self.original_settings)
             QMessageBox.information(self, "Info", "Spot scanning completed.")
@@ -541,7 +591,9 @@ class MainWindow(QMainWindow):
             original_settings['exposure'] = self.current_exposure
             original_settings['framerate'] = self.current_framerate
         except ValueError as e:
-            QMessageBox.critical(self, "Error", "Invalid camera settings in input fields.")
+            QMessageBox.critical(
+                self, "Error", "Invalid camera settings in input fields."
+            )
             return None
 
         return original_settings
@@ -556,13 +608,27 @@ class MainWindow(QMainWindow):
 
         desired_width = max(MIN_ROI_WIDTH, spot['width'])
         desired_height = max(MIN_ROI_HEIGHT, spot['height'])
-        desired_width = ((desired_width + STEP_INCREMENT_X - 1) // STEP_INCREMENT_X) * STEP_INCREMENT_X
-        desired_height = ((desired_height + STEP_INCREMENT_Y - 1) // STEP_INCREMENT_Y) * STEP_INCREMENT_Y
+        desired_width = (
+            ((desired_width + STEP_INCREMENT_X - 1) // STEP_INCREMENT_X) 
+            * STEP_INCREMENT_X
+        )
+        desired_height = (
+            ((desired_height + STEP_INCREMENT_Y - 1) // STEP_INCREMENT_Y)
+            * STEP_INCREMENT_Y
+        )
         desired_width = min(desired_width, FULL_FRAME_WIDTH)
         desired_height = min(desired_height, FULL_FRAME_HEIGHT)
 
-        offset_x = max(0, spot['x'] + self.original_settings['roi_x'] - (desired_width - spot['width']) // 2)
-        offset_y = max(0, spot['y'] + self.original_settings['roi_y'] - (desired_height - spot['height']) // 2)
+        offset_x = max(
+            0, 
+            spot['x'] + self.original_settings['roi_x'] - 
+            (desired_width - spot['width']) // 2
+        )
+        offset_y = max(
+            0, 
+            spot['y'] + self.original_settings['roi_y'] - 
+            (desired_height - spot['height']) // 2
+        )
         offset_x -= offset_x % STEP_INCREMENT_X
         offset_y -= offset_y % STEP_INCREMENT_Y
         offset_x = min(offset_x, FULL_FRAME_WIDTH - desired_width)
@@ -598,7 +664,6 @@ class MainWindow(QMainWindow):
         })
 
     def adjust_gain_to_target(self, max_pixel_value, target_value=150):
-        """Adjust the gain values to make the highest pixel value around the target value."""
         if max_pixel_value == 0:
             return
 
@@ -607,15 +672,30 @@ class MainWindow(QMainWindow):
         while True:
             current_analog_gain = self.current_analog_gain
             current_digital_gain = self.current_digital_gain
-            print(f"Current gains: Analog Gain = {round(current_analog_gain, 2)}, Digital Gain = {round(current_digital_gain, 2)}")
+            print(
+                "Current gains: "
+                f"Analog Gain = {round(current_analog_gain, 2)}, "
+                f"Digital Gain = {round(current_digital_gain, 2)}"
+            )
             current_total_gain = current_analog_gain * current_digital_gain
-            required_total_gain = round((target_value / max_pixel_value) * current_total_gain, 2)
+            required_total_gain = round(
+                (target_value / max_pixel_value) * current_total_gain, 2
+            )
 
-            new_analog_gain = min(max(required_total_gain, self.min_analog_gain), self.max_analog_gain)
+            new_analog_gain = min(
+                max(required_total_gain, self.min_analog_gain), 
+                self.max_analog_gain
+            )
             new_digital_gain = round(required_total_gain / new_analog_gain, 2)
-            new_digital_gain = min(max(new_digital_gain, self.min_digital_gain), self.max_digital_gain)
+            new_digital_gain = min(
+                max(new_digital_gain, self.min_digital_gain), 
+                self.max_digital_gain
+            )
 
-            if current_analog_gain == new_analog_gain and current_digital_gain == new_digital_gain:
+            if (
+                current_analog_gain == new_analog_gain 
+                and current_digital_gain == new_digital_gain
+            ):
                 break
 
             self.camera_control.set_parameters({
@@ -625,7 +705,10 @@ class MainWindow(QMainWindow):
 
             time.sleep(0.5)
             
-            print(f"Adjusted gains: Analog Gain = {round(new_analog_gain, 2)}, Digital Gain = {new_digital_gain}")
+            print(
+                f"Adjusted gains: Analog Gain = {round(new_analog_gain, 2)}, "
+                f"Digital Gain = {new_digital_gain}"
+            )
 
             frame = self.camera_control.get_current_frame()
             max_pixel_value = np.max(frame)
@@ -636,12 +719,26 @@ class MainWindow(QMainWindow):
             if max_pixel_value <= 220:
                 break
 
-            if new_analog_gain <= self.min_analog_gain and new_digital_gain <= self.min_digital_gain and max_pixel_value < target_value:
-                print("Both gains are at their minimum values and intensity is below target. Exiting adjustment loop.")
+            if (
+                new_analog_gain <= self.min_analog_gain 
+                and new_digital_gain <= self.min_digital_gain 
+                and max_pixel_value < target_value
+            ):
+                print(
+                    "Both gains are at their minimum values and intensity is "
+                    "below target. Exiting adjustment loop."
+                )
                 break
 
-            if new_analog_gain >= self.max_analog_gain and new_digital_gain >= self.max_digital_gain and max_pixel_value > target_value:
-                print("Both gains are at their maximum values and intensity is above target. Exiting adjustment loop.")
+            if (
+                new_analog_gain >= self.max_analog_gain 
+                and new_digital_gain >= self.max_digital_gain 
+                and max_pixel_value > target_value
+            ):
+                print(
+                    "Both gains are at their maximum values and intensity is "
+                    "above target. Exiting adjustment loop."
+                )
                 break
 
         if not adjustment_made:
@@ -649,7 +746,6 @@ class MainWindow(QMainWindow):
         print(f"Final max pixel value after adjustments: {max_pixel_value}")
 
     def scan_roi_and_adjust_gain(self, num_frames=10, target_value=150):
-        """Scan the ROI for a few frames to find the maximum pixel value and adjust gain accordingly."""
         max_pixel_value = 0
 
         for _ in range(num_frames):
@@ -663,7 +759,9 @@ class MainWindow(QMainWindow):
         
         self.start_time = time.perf_counter()
         self.is_recording = True
-        QTimer.singleShot(180000, lambda: self.stop_spot_recording(self.current_spot_id))
+        QTimer.singleShot(
+            180000, lambda: self.stop_spot_recording(self.current_spot_id)
+        )
 
     def start_spot_recording(self, spot_id):
         if self.current_spot_id is not None:
@@ -673,7 +771,9 @@ class MainWindow(QMainWindow):
         self.spot_frames_storage[spot_id] = []
         self.spot_timestamps_storage[spot_id] = []
 
-        spot = next((s for s in self.processor.spots if s['id'] == spot_id), None)
+        spot = next(
+            (s for s in self.processor.spots if s['id'] == spot_id), None
+        )
         if spot:
             self.adjust_camera_to_spot(spot)
             self.minimize_exposure()
@@ -688,27 +788,47 @@ class MainWindow(QMainWindow):
                 print(f"Spot {spot_id} not found.")
                 return
             
-            calculated_x = spot['x'] + self.original_settings['roi_x'] - self.current_x
-            calculated_y = spot['y'] + self.original_settings['roi_y'] - self.current_y
-            roi = {'x': calculated_x, 'y': calculated_y, 'width': spot['width'], 'height': spot['height']}
+            calculated_x = (
+                spot['x'] + self.original_settings['roi_x'] - self.current_x
+            )
+            calculated_y = (
+                spot['y'] + self.original_settings['roi_y'] - self.current_y
+            )
+            roi = {
+                'x': calculated_x,
+                'y': calculated_y,
+                'width': spot['width'],
+                'height': spot['height']
+            }
             
             frames = self.spot_frames_storage.get(spot_id, [])
             timestamps = self.spot_timestamps_storage.get(spot_id, [])
 
             intensities = {'90': [], '45': [], '135': [], '0': []}
             for frame in frames:
-                extracted = self.image_processor.extract_polarization_intensities(frame, roi)
+                extracted = self.image_processor.extract_polar_inten(
+                    frame, roi
+                )
                 for key in intensities.keys():
                     intensities[key].append(extracted[key])
            
+            self.data_analyzer.analyze(
+                intensities, timestamps, self.current_spot_id
+            )
+
             self.current_spot_id = None
             self.is_recording = False
             self.process_next_spot()
 
     def restore_camera_settings(self, settings):
-        required_keys = ['roi_x', 'roi_y', 'roi_width', 'roi_height', 'exposure', 'framerate']
+        required_keys = [
+            'roi_x', 'roi_y', 'roi_width', 'roi_height', 
+            'exposure', 'framerate'
+        ]
         if not all(key in settings for key in required_keys):
-            QMessageBox.critical(self, "Error", "Incomplete camera settings to restore.")
+            QMessageBox.critical(
+                self, "Error", "Incomplete camera settings to restore."
+            )
             return
         
         try:
@@ -730,18 +850,38 @@ class MainWindow(QMainWindow):
                 "Height": {"current": settings['roi_height']}
             })
         
-            self.camera_control.set_parameters({"ExposureTime": {"current": settings['exposure'] * 1000}})
-            self.camera_control.set_parameters({"AcquisitionFrameRate": {"current": settings['framerate']}})
+            self.camera_control.set_parameters({
+                "ExposureTime": {
+                    "current": settings['exposure'] * 1000
+                }
+            })
+            self.camera_control.set_parameters({
+                "AcquisitionFrameRate": {
+                    "current": settings['framerate']
+                }
+            })
         except ValueError as e:
-            QMessageBox.critical(self, "Error", f"Failed to restore camera settings: {e}")
+            QMessageBox.critical(
+                self, "Error", f"Failed to restore camera settings: {e}"
+            )
 
     def connect_signals(self):
-        self.camera_control.image_acquired.connect(self.image_display.on_image_received)
-        self.camera_control.parameter_updated.connect(self.on_parameter_updated)
-        self.camera_control.acquisition_updated.connect(self.on_acquisition_updated)
+        self.camera_control.image_acquired.connect(
+            self.image_display.on_image_received
+        )
+        self.camera_control.parameter_updated.connect(
+            self.on_parameter_updated
+        )
+        self.camera_control.acquisition_updated.connect(
+            self.on_acquisition_updated
+        )
         self.camera_control.camera_error.connect(self.on_camera_error)
-        self.camera_control.acquisition_started.connect(self.on_acquisition_started)
-        self.camera_control.acquisition_stopped.connect(self.on_acquisition_stopped)
+        self.camera_control.acquisition_started.connect(
+            self.on_acquisition_started
+        )
+        self.camera_control.acquisition_stopped.connect(
+            self.on_acquisition_stopped
+        )
         self.camera_control.frame_captured.connect(self.on_frame_captured)
 
     @Slot(dict)
@@ -751,15 +891,23 @@ class MainWindow(QMainWindow):
             self.min_framerate = framerate_info.get('min', None)
             self.max_framerate = framerate_info.get('max', None)
             self.current_framerate = framerate_info.get('current', None)
-            self.min_framerate_label.setText(f"Min Frame Rate: {round(self.min_framerate, 2)} fps")
-            self.max_framerate_label.setText(f"Max Frame Rate: {round(self.max_framerate, 2)} fps")
+            self.min_framerate_label.setText(
+                f"Min Frame Rate: {round(self.min_framerate, 2)} fps"
+            )
+            self.max_framerate_label.setText(
+                f"Max Frame Rate: {round(self.max_framerate, 2)} fps"
+            )
             self.framerate_input.setText(str(round(self.current_framerate, 2)))
             
             exposure_info = parameters.get("ExposureTime", {})
             self.min_exposure = exposure_info.get('min', None) / 1000
             self.max_exposure = exposure_info.get('max', None) / 1000
-            self.min_exposure_label.setText(f"Min Exposure: {round(self.min_exposure, 2)} ms")
-            self.max_exposure_label.setText(f"Max Exposure: {round(self.max_exposure, 2)} ms")
+            self.min_exposure_label.setText(
+                f"Min Exposure: {round(self.min_exposure, 2)} ms"
+            )
+            self.max_exposure_label.setText(
+                f"Max Exposure: {round(self.max_exposure, 2)} ms"
+            )
             self.current_exposure = exposure_info.get('current', None) / 1000
             self.exposure_input.setText(str(round(self.current_exposure, 2)))
             
@@ -803,28 +951,48 @@ class MainWindow(QMainWindow):
             self.min_analog_gain = analog_info.get('min', None)
             self.max_analog_gain = analog_info.get('max', None)
             self.current_analog_gain = analog_info.get('current', None)
-            self.min_analog_gain_label.setText(f"Min AnalogGain: {round(self.min_analog_gain, 2)}")
-            self.max_analog_gain_label.setText(f"Max AnalogGain: {round(self.max_analog_gain, 2)}")
-            self.analog_gain_input.setText(str(round(self.current_analog_gain, 2)))
+            self.min_analog_gain_label.setText(
+                f"Min AnalogGain: {round(self.min_analog_gain, 2)}"
+            )
+            self.max_analog_gain_label.setText(
+                f"Max AnalogGain: {round(self.max_analog_gain, 2)}"
+            )
+            self.analog_gain_input.setText(
+                str(round(self.current_analog_gain, 2))
+            )
             
             digital_info = parameters.get("DigitalGain", {})
             self.min_digital_gain = digital_info.get('min', None)
             self.max_digital_gain = digital_info.get('max', None)
             self.current_digital_gain = digital_info.get('current', None)
-            self.min_digital_gain_label.setText(f"Min DigitalGain: {round(self.min_digital_gain, 2)}")
-            self.max_digital_gain_label.setText(f"Max DigitalGain: {round(self.max_digital_gain, 2)}")
-            self.digital_gain_input.setText(str(round(self.current_digital_gain, 2)))
+            self.min_digital_gain_label.setText(
+                f"Min DigitalGain: {round(self.min_digital_gain, 2)}"
+            )
+            self.max_digital_gain_label.setText(
+                f"Max DigitalGain: {round(self.max_digital_gain, 2)}"
+            )
+            self.digital_gain_input.setText(
+                str(round(self.current_digital_gain, 2))
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Parameter Update Error", f"Error updating UI with new parameters: {str(e)}", QMessageBox.Ok)
+            QMessageBox.critical(
+                self, "Parameter Update Error",
+                f"Error updating UI with new parameters: {str(e)}",
+                QMessageBox.Ok
+            )
 
     @Slot(int, int)
     def on_acquisition_updated(self, frame_counter, error_counter):
         fps = round(self.current_framerate, 2)
-        self.label_infos.setText(f"Acquired: {frame_counter}, Errors: {error_counter}, fps: {fps}")
+        self.label_infos.setText(
+            f"Acquired: {frame_counter}, Errors: {error_counter}, fps: {fps}"
+        )
 
     @Slot(str)
     def on_camera_error(self, error_message):
-        QMessageBox.critical(self, "Camera Error", error_message, QMessageBox.Ok)
+        QMessageBox.critical(
+            self, "Camera Error", error_message, QMessageBox.Ok
+        )
 
     @Slot()
     def on_acquisition_started(self):
@@ -833,20 +1001,3 @@ class MainWindow(QMainWindow):
     @Slot()
     def on_acquisition_stopped(self):
         self.start_pause_button.setText("Start Acquisition")
-
-if __name__ == "__main__":
-    from PySide6.QtWidgets import QApplication
-    import sys
-    
-    app = QApplication(sys.argv)
-   
-    camera_control = CameraControl()
-    image_processor = ImageProcessor()
-    data_analyzer = DataAnalyzer()
-
-    main_window = MainWindow(camera_control, image_processor, data_analyzer)
-    main_window.show()
-    
-    camera_control.initialize_and_start_acquisition()
-
-    sys.exit(app.exec())
