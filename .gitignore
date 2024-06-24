@@ -4,3 +4,6 @@ __pycache__/
 # Distribution / packaging
 build/
 PolarCam.egg-info/
+
+# virtualenv
+venv/

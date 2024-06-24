@@ -10,15 +10,14 @@ setup(
     install_requires=[
         "PySide6",
         "opencv-python",
-        "numpy",
+        "numpy<2",
         "scikit-image",
         "matplotlib",
         "scipy",
-        "ids_peak",
     ],
     entry_points={
         'console_scripts': [
-            'polarcam=main:main',
+            'polarcam = polar_cam.main:main',
         ],
     },
 )
