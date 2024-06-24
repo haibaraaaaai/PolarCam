@@ -6,10 +6,11 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
 import datetime
-
+from polar_cam.utils import adjust_rectangle, blobs_overlap
 
 class ImageProcessor:
-    def __init__(self, min_sigma=10, max_sigma=30, num_sigma=10, threshold=0.3):
+    def __init__(self, min_sigma=10, max_sigma=30, num_sigma=10, 
+                 threshold=0.3):
         self.min_sigma = min_sigma
         self.max_sigma = max_sigma
         self.num_sigma = num_sigma
@@ -17,24 +18,26 @@ class ImageProcessor:
         self.spots = []
 
     def preprocess_image(self, image):
-        """Preprocess the image using adaptive histogram equalization and median filtering."""
         image = exposure.equalize_adapthist(image, clip_limit=0.03)
-        
         image = cv2.medianBlur((image * 255).astype(np.uint8), 5)
-        
         return image
 
     def detect_spots_log(self, image):
-        """Detect spots using the Laplacian of Gaussian (LoG) method."""
-        blobs = blob_log(image, min_sigma=self.min_sigma, max_sigma=self.max_sigma, num_sigma=self.num_sigma, threshold=self.threshold)
-        blobs[:, 2] = blobs[:, 2] * np.sqrt(2)  # Convert standard deviation to radius
+        blobs = blob_log(
+            image, 
+            min_sigma=self.min_sigma, 
+            max_sigma=self.max_sigma, 
+            num_sigma=self.num_sigma, 
+            threshold=self.threshold
+        )
+        blobs[:, 2] = blobs[:, 2] * np.sqrt(2)
         return blobs
 
     def shape_check(self, blob, image):
-        """Check the circularity of the detected blob."""
         y, x, r = blob
         minr, minc, maxr, maxc = int(y - r), int(x - r), int(y + r), int(x + r)
-        if minr < 0 or minc < 0 or maxr > image.shape[0] or maxc > image.shape[1]:
+        if (minr < 0 or minc < 0 or maxr > image.shape[0] or 
+            maxc > image.shape[1]):
             return False
 
         roi = image[minr:maxr, minc:maxc]
@@ -42,13 +45,9 @@ class ImageProcessor:
         bounding_box_area = roi.shape[0] * roi.shape[1]
         circularity = blob_area / bounding_box_area
 
-        if circularity < 0.8:
-            return False
-
-        return True
+        return circularity >= 0.8
 
     def detect_spots(self, image):
-        """Main method to detect spots and convert blobs to rectangles."""
         preprocessed_image = self.preprocess_image(image)
         blobs = self.detect_spots_log(preprocessed_image)
 
@@ -62,23 +61,20 @@ class ImageProcessor:
                 x = int(x - r)
                 y = int(y - r)
 
-                rect_x, rect_y, rect_w, rect_h = self.adjust_rectangle(x, y, w, h)
-                self.spots.append({'id': unique_id, 'x': rect_x, 'y': rect_y, 'width': rect_w, 'height': rect_h})
+                rect_x, rect_y, rect_w, rect_h = adjust_rectangle(x, y, w, h)
+                self.spots.append({
+                    'id': unique_id, 
+                    'x': rect_x, 
+                    'y': rect_y, 
+                    'width': rect_w, 
+                    'height': rect_h
+                })
                 unique_id += 1
 
         self.check_for_overlaps(blobs)
         self.save_blobs_image(preprocessed_image, blobs)
-        
-        print(self.spots)
-        
-        return self.spots
 
-    def adjust_rectangle(self, x, y, w, h):
-        if x % 2 != 0: x += 1
-        if y % 2 != 0: y += 1
-        if w % 2 != 0: w += 1
-        if h % 2 != 0: h += 1
-        return (x, y, w, h)
+        return self.spots
 
     def get_spots(self):
         return self.spots
@@ -86,20 +82,10 @@ class ImageProcessor:
     def check_for_overlaps(self, blobs):
         for i in range(len(blobs)):
             for j in range(i + 1, len(blobs)):
-                if self.blobs_overlap(blobs[i], blobs[j]):
+                if blobs_overlap(blobs[i], blobs[j]):
                     print(f"Blobs {i} and {j} overlap.")
 
-    def blobs_overlap(self, blob1, blob2):
-        y1, x1, r1 = blob1
-        y2, x2, r2 = blob2
-
-        distance = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-        if distance < (r1 + r2):
-            return True
-        return False
-
     def save_blobs_image(self, image, blobs):
-        """Save the detected blobs image using matplotlib and display with OpenCV."""
         plt.figure(figsize=(10, 10))
         plt.imshow(image, cmap='gray')
         plt.title("Detected Blobs with Laplacian of Gaussian")
@@ -123,7 +109,7 @@ class ImageProcessor:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    def extract_polarization_intensities(self, image, roi):
+    def extract_polar_inten(self, image, roi):
         x, y, width, height = roi['x'], roi['y'], roi['width'], roi['height']
         roi_image = image[y:y+height, x:x+width]
 
@@ -142,7 +128,7 @@ class ImageProcessor:
                 count_intensities['135'] += 1
                 count_intensities['0'] += 1
 
-        avg_intensities = {angle: sum_intensity / count_intensities[angle] 
+        avg_intensities = {angle: sum_intensity / count_intensities[angle]
                            for angle, sum_intensity in sum_intensities.items()}
 
         return avg_intensities

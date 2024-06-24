@@ -30,9 +30,8 @@ class DataAnalyzer:
         }
 
         self.fft_welch(signals, timestamps, spot_id)
-        
+
     def fft_welch(self, signals, timestamps, spot_id):
-        """Perform FFT analysis on intensity data to find rotation speed and plot the speed-time diagram."""
         plt.figure(figsize=(14, 8))
 
         for label, intensity in signals.items():
@@ -44,20 +43,28 @@ class DataAnalyzer:
                 start = i * self.overlap
                 end = start + self.windowsize
                 segment = intensity[start:end]
-                
+
                 if len(segment) < self.windowsize:
                     continue
-                    
+
                 segment_timestamps = timestamps[start:end]
                 fs = 1 / np.mean(np.diff(segment_timestamps))
-                
+
                 is_complex = np.iscomplexobj(segment)
-                freqs, power = signal.welch(segment, fs=fs, nperseg=self.nperseg, nfft=self.nfft, return_onesided=not is_complex)
+                freqs, power = signal.welch(
+                    segment, 
+                    fs=fs, 
+                    nperseg=self.nperseg, 
+                    nfft=self.nfft, 
+                    return_onesided=not is_complex
+                )
                 magnitude = np.abs(power)
-                
+
                 dominant_frequency = freqs[np.argmax(magnitude)]
                 dom_freq.append(dominant_frequency)
-                time_segments.append((segment_timestamps[0] + segment_timestamps[-1]) / 2)
+                time_segments.append(
+                    (segment_timestamps[0] + segment_timestamps[-1]) / 2
+                )
 
             plt.plot(time_segments, dom_freq, label=label)
 
@@ -72,9 +79,10 @@ class DataAnalyzer:
         plt.close()
 
     def save_raw_data(self, c90, c45, c135, c0, timestamps, spot_id):
-        """Save raw values and timestamps to a text file."""
         with open(f'raw_data_spot_{spot_id}.txt', 'w') as f:
             f.write(f"Spot ID: {spot_id}\n\n")
             f.write("Timestamps, c90, c45, c135, c0 values:\n")
-            for ts, c90_val, c45_val, c135_val, c0_val in zip(timestamps, c90, c45, c135, c0):
+            for ts, c90_val, c45_val, c135_val, c0_val in zip(
+                timestamps, c90, c45, c135, c0
+            ):
                 f.write(f"{ts}, {c90_val}, {c45_val}, {c135_val}, {c0_val}\n")
