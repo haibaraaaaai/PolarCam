@@ -14,8 +14,8 @@ def plot_results(file_path, results):
         f_interp = interp1d(
             np.array(timestamps)[valid_indices], 
             np.array(theta1_values)[valid_indices], 
-            kind='linear', 
-            fill_value="extrapolate"
+            kind = 'linear', 
+            fill_value = "extrapolate"
         )
         theta1_values = f_interp(timestamps)
 

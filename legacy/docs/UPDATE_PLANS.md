@@ -7,4 +7,4 @@ noises. Elec noise at 50 Hz? Light at 100 Hz?
 5. Check dependency in venv.
 6. Have the ability to add / remove spots.
 7. Add data folder on start and spot scan.
-8. test_fft, test_Fourkas_3d, test_I0_I1_ITOT
+8. test_Fourkas_3d, test_I0_I1_ITOT
