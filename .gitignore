@@ -7,3 +7,9 @@ PolarCam.egg-info/
 
 # virtualenv
 venv/
+
+# data
+data/*
+
+# not currently working, might abandon
+tests/test_fourkas_3d.py
