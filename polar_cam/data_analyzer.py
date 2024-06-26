@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from scipy import signal
 
 class DataAnalyzer:
-    def __init__(self, nperseg=2000, nfft=8000, windowsize=2000, overlap=1000):
+    def __init__(self, nperseg=400, nfft=1600, windowsize=400, overlap=200):
         self.nperseg = nperseg
         self.nfft = nfft
         self.windowsize = windowsize
@@ -31,13 +31,13 @@ class DataAnalyzer:
 
         self.fft_welch(signals, timestamps, spot_id)
 
-    def fft_welch(self, signals, timestamps, spot_id):
+    def fft_welch(self, signals, timestamps, spot_id, threshold=1):
         plt.figure(figsize=(14, 8))
 
         for label, intensity in signals.items():
             n_seg = int((len(intensity) - self.overlap) / self.overlap)
             dom_freq = []
-            time_segments = []
+            current_time_segments = []
 
             for i in range(n_seg):
                 start = i * self.overlap
@@ -60,13 +60,15 @@ class DataAnalyzer:
                 )
                 magnitude = np.abs(power)
 
-                dominant_frequency = freqs[np.argmax(magnitude)]
-                dom_freq.append(dominant_frequency)
-                time_segments.append(
-                    (segment_timestamps[0] + segment_timestamps[-1]) / 2
-                )
+                if np.max(magnitude) >= threshold:
+                    dominant_frequency = freqs[np.argmax(magnitude)]
+                    dom_freq.append(dominant_frequency)
+                    current_time_segments.append(
+                        (segment_timestamps[0] + segment_timestamps[-1]) / 2
+                    )
 
-            plt.plot(time_segments, dom_freq, label=label)
+            if dom_freq:
+                plt.plot(current_time_segments, dom_freq, label=label)
 
         plt.title(f'Speed-Time Diagram for Spot {spot_id}')
         plt.xlabel('Time (s)')

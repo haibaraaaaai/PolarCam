@@ -18,11 +18,11 @@ def plot_results(file_path, results):
         'ITOT': ITOT
     }
 
-    signals_fft, seg_time = fft_welch(signals, timestamps)
+    signals_fft, time_segments_dict = fft_welch(signals, timestamps)
 
     plt.figure(figsize=(10, 6))
     for s in signals_fft:
-        plt.plot(seg_time, signals_fft[s], label=s)
+        plt.plot(time_segments_dict[s], signals_fft[s], label=s)
     plt.xlabel('Time (s)')
     plt.ylabel('Speed (Hz)')
     plt.legend()
@@ -37,12 +37,13 @@ def plot_results(file_path, results):
     print(f"Plot saved as {save_path}")
 
 def fft_welch(signals, timestamps, nperseg=400, 
-              nfft=1600, windowsize=400, overlap=200):
+              nfft=1600, windowsize=400, overlap=200, threshold=1):
     signals_fft = {}
+    time_segments_dict = {}
     for label, intensity in signals.items():
         n_seg = int((len(intensity) - overlap) / overlap)
         dom_freq = []
-        time_segments = []
+        current_time_segments = []
 
         for i in range(n_seg):
             start = i * overlap
@@ -65,15 +66,17 @@ def fft_welch(signals, timestamps, nperseg=400,
             )
             magnitude = np.abs(power)
 
-            dominant_frequency = freqs[np.argmax(magnitude)]
-            dom_freq.append(dominant_frequency)
-            time_segments.append(
-                (segment_timestamps[0] + segment_timestamps[-1]) / 2
-            )
+            if np.max(magnitude) >= threshold:
+                dominant_frequency = freqs[np.argmax(magnitude)]
+                dom_freq.append(dominant_frequency)
+                current_time_segments.append(
+                    (segment_timestamps[0] + segment_timestamps[-1]) / 2
+                )
 
         signals_fft[label] = dom_freq
+        time_segments_dict[label] = current_time_segments
 
-    return signals_fft, time_segments
+    return signals_fft, time_segments_dict
 
 if __name__ == "__main__":
     file_path, results = select_and_calculate()

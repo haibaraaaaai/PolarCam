@@ -1,10 +1,12 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit,
     QHBoxLayout, QDockWidget, QFormLayout, QGroupBox, QMessageBox,
-    QStatusBar, QFileDialog, QScrollArea, QApplication
+    QStatusBar, QFileDialog, QScrollArea, QApplication, QInputDialog
 )
 from PySide6.QtCore import Qt, QTimer, Slot
 import cv2
+import os
+# import shutil
 import numpy as np
 import time
 from polar_cam.image_display import Display
@@ -27,6 +29,9 @@ class MainWindow(QMainWindow):
         self.original_settings = None
         self.current_spot_id = None
         self.processor = self.image_processor
+
+        self.data_directory = None
+        self.sample_counter = 1
 
         self.init_camera_parameters()
         self.setup_ui()
@@ -104,6 +109,27 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(scan_spot_button)
 
         layout.addLayout(buttons_layout)
+
+    def prompt_for_data_directory(self):
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Directory to Save Data", 
+            os.path.join(os.getcwd(), "PolarCam", "data")
+        )
+        if directory:
+            folder_name, ok = QInputDialog.getText(
+                self, "Folder Name", "Enter the folder name:")
+            if ok and folder_name:
+                self.data_directory = os.path.join(directory, folder_name)
+                os.makedirs(self.data_directory, exist_ok=True)
+                QMessageBox.information(
+                    self, "Directory Created",
+                      f"Data will be saved in: {self.data_directory}")
+            else:
+                QMessageBox.warning(
+                    self, "Invalid Input", "Folder name was not provided.")
+        else:
+            QMessageBox.warning(
+                self, "No Directory Selected", "No directory was selected.")
 
     def setup_parameter_sidebar(self):
         self.parameter_sidebar = QDockWidget("Parameters", self)
