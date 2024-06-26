@@ -72,22 +72,26 @@ def fetch_camera_parameters(node_map_remote_device, parameters, camera_error):
     try:
         param_names = [
             "AcquisitionFrameRate", "ExposureTime", "Width", "Height",
-            "OffsetX", "OffsetY", "AnalogGain", "DigitalGain"
+            "OffsetX", "OffsetY"
         ]
         for param in param_names:
-            parameters[param]["min"] = (
-                node_map_remote_device.FindNode(param).Minimum()
-            )
-            parameters[param]["max"] = (
-                node_map_remote_device.FindNode(param).Maximum()
-            )
-            parameters[param]["current"] = (
-                node_map_remote_device.FindNode(param).Value()
-            )
+            node = node_map_remote_device.FindNode(param)
+            parameters[param]["min"] = node.Minimum()
+            parameters[param]["max"] = node.Maximum()
+            parameters[param]["current"] = node.Value()
             if param in ["Width", "Height", "OffsetX", "OffsetY"]:
-                parameters[param]["increment"] = (
-                    node_map_remote_device.FindNode(param).Increment()
-                )
+                parameters[param]["increment"] = node.Increment()
+
+        gain_types = ["AnalogGain", "DigitalGain"]
+        for gain in gain_types:
+            gain_sel = "AnalogAll" if gain == "AnalogGain" else "DigitalAll"
+            node_map_remote_device.FindNode("GainSelector")\
+                .SetCurrentEntry(gain_sel)
+            gain_node = node_map_remote_device.FindNode("Gain")
+            parameters[gain]["min"] = gain_node.Minimum()
+            parameters[gain]["max"] = gain_node.Maximum()
+            parameters[gain]["current"] = gain_node.Value()
+
         return parameters
     except Exception as e:
         camera_error.emit(f"Failed to fetch initial parameters: {str(e)}")

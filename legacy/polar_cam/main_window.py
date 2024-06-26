@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         self.start_time = None
         self.original_settings = None
         self.current_spot_id = None
-        self.processor = None
+        self.processor = self.image_processor
 
         self.init_camera_parameters()
         self.setup_ui()
@@ -77,20 +77,32 @@ class MainWindow(QMainWindow):
         self.create_statusbar()
 
         buttons_layout = QHBoxLayout()
-        buttons = [
-            ("Toggle Parameters", self.toggle_parameter_sidebar),
-            ("Start Acquisition", self.toggle_acquisition),
-            ("Start Recording", self.toggle_recording),
-            ("Detect Spots", self.on_detect_spots),
-            ("Scan Spot", self.on_scan_spot)
-        ]
 
-        for label, callback in buttons:
-            button = QPushButton(label, self)
-            button.clicked.connect(callback)
-            button.setFixedSize(150, 30)
-            buttons_layout.addWidget(button)
-    
+        self.start_pause_button = QPushButton("Start Acquisition", self)
+        self.start_pause_button.clicked.connect(self.toggle_acquisition)
+        self.start_pause_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(self.start_pause_button)
+
+        self.record_button = QPushButton("Start Recording", self)
+        self.record_button.clicked.connect(self.toggle_recording)
+        self.record_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(self.record_button)
+
+        toggle_params_button = QPushButton("Toggle Parameters", self)
+        toggle_params_button.clicked.connect(self.toggle_parameter_sidebar)
+        toggle_params_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(toggle_params_button)
+
+        detect_spots_button = QPushButton("Detect Spots", self)
+        detect_spots_button.clicked.connect(self.on_detect_spots)
+        detect_spots_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(detect_spots_button)
+
+        scan_spot_button = QPushButton("Scan Spot", self)
+        scan_spot_button.clicked.connect(self.on_scan_spot)
+        scan_spot_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(scan_spot_button)
+
         layout.addLayout(buttons_layout)
 
     def setup_parameter_sidebar(self):
@@ -544,13 +556,13 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self.image_processor.min_sigma = min_sigma
-        self.image_processor.max_sigma = max_sigma
-        self.image_processor.num_sigma = num_sigma
-        self.image_processor.threshold = threshold
+        self.processor.min_sigma = min_sigma
+        self.processor.max_sigma = max_sigma
+        self.processor.num_sigma = num_sigma
+        self.processor.threshold = threshold
 
         image = self.camera_control.get_current_frame()
-        self.spots = self.image_processor.detect_spots(image)
+        self.spots = self.processor.detect_spots(image)
 
     def reset_spot_detection_parameters(self):
         self.min_sigma_input.setText("10")
@@ -760,7 +772,7 @@ class MainWindow(QMainWindow):
         self.start_time = time.perf_counter()
         self.is_recording = True
         QTimer.singleShot(
-            180000, lambda: self.stop_spot_recording(self.current_spot_id)
+            18000, lambda: self.stop_spot_recording(self.current_spot_id)
         )
 
     def start_spot_recording(self, spot_id):
@@ -806,7 +818,7 @@ class MainWindow(QMainWindow):
 
             intensities = {'90': [], '45': [], '135': [], '0': []}
             for frame in frames:
-                extracted = self.image_processor.extract_polar_inten(
+                extracted = self.processor.extract_polar_inten(
                     frame, roi
                 )
                 for key in intensities.keys():
@@ -883,6 +895,14 @@ class MainWindow(QMainWindow):
             self.on_acquisition_stopped
         )
         self.camera_control.frame_captured.connect(self.on_frame_captured)
+
+    def closeEvent(self, event):
+        self.cleanup()
+        event.accept()
+
+    def cleanup(self):
+        self.camera_control.destroy_all()
+        QApplication.instance().quit()
 
     @Slot(dict)
     def on_parameter_updated(self, parameters):

@@ -169,8 +169,6 @@ class CameraControl(QObject):
             self.camera_error.emit(f"Error stopping acquisition: {str(e)}")
 
     def close_device(self):
-        self.stop_acquisition()
-
         if self.datastream is not None:
             try:
                 for buffer in self.datastream.AnnouncedBuffers():
