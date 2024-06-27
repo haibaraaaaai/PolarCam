@@ -10,3 +10,7 @@ venv/
 
 # not currently working, might abandon
 tests/test_fourkas_3d.py
+
+# ignore data files but keep the folder
+data/*
+!data/.gitkeep
