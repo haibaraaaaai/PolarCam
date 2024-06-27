@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QDockWidget, QFormLayout, QGroupBox, QMessageBox,
     QStatusBar, QFileDialog, QScrollArea, QApplication, QInputDialog
 )
+from PySide6.QtGui import QImage
 from PySide6.QtCore import Qt, QTimer, Slot
 import cv2
 import os
@@ -589,7 +590,16 @@ class MainWindow(QMainWindow):
         self.processor.threshold = threshold
 
         image = self.camera_control.get_current_frame()
-        self.spots = self.processor.detect_spots(image, self.data_directory)
+        self.camera_control.stop_acquisition()
+        highlighted_image, self.spots = self.processor.detect_spots(
+            image, self.data_directory)
+
+        self.update_display(highlighted_image)
+
+    def update_display(self, image):
+        height, width = image.shape
+        qimage = QImage(image.data, width, height, QImage.Format_RGB888)
+        self.image_display.on_image_received(qimage)
 
     def reset_spot_detection_parameters(self):
         self.min_sigma_input.setText("10")
