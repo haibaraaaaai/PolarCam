@@ -1,4 +1,5 @@
 import cv2
+import os
 import numpy as np
 from skimage.feature import blob_log
 from skimage import exposure
@@ -47,7 +48,7 @@ class ImageProcessor:
 
         return circularity >= 0.8
 
-    def detect_spots(self, image):
+    def detect_spots(self, image, output_directory):
         preprocessed_image = self.preprocess_image(image)
         blobs = self.detect_spots_log(preprocessed_image)
 
@@ -72,7 +73,7 @@ class ImageProcessor:
                 unique_id += 1
 
         self.check_for_overlaps(blobs)
-        self.save_blobs_image(preprocessed_image, blobs)
+        self.save_blobs_image(preprocessed_image, blobs, output_directory)
 
         return self.spots
 
@@ -85,7 +86,7 @@ class ImageProcessor:
                 if blobs_overlap(blobs[i], blobs[j]):
                     print(f"Blobs {i} and {j} overlap.")
 
-    def save_blobs_image(self, image, blobs):
+    def save_blobs_image(self, image, blobs, output_directory):
         plt.figure(figsize=(10, 10))
         plt.imshow(image, cmap='gray')
         plt.title("Detected Blobs with Laplacian of Gaussian")
@@ -100,7 +101,7 @@ class ImageProcessor:
                 plt.gca().add_patch(c)
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f'blobs_{timestamp}.png'
+        filename = os.path.join(output_directory, f'blobs_{timestamp}.png')
         plt.savefig(filename)
         plt.close()
 

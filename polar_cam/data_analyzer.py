@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
@@ -9,13 +10,14 @@ class DataAnalyzer:
         self.windowsize = windowsize
         self.overlap = overlap
 
-    def analyze(self, intensities, timestamps, spot_id):
+    def analyze(self, intensities, timestamps, spot_id, output_directory):
         c90 = np.array(intensities['90'])
         c45 = np.array(intensities['45'])
         c135 = np.array(intensities['135'])
         c0 = np.array(intensities['0'])
 
-        self.save_raw_data(c90, c45, c135, c0, timestamps, spot_id)
+        self.save_raw_data(
+            c90, c45, c135, c0, timestamps, spot_id, output_directory)
 
         I0 = (c0 - c90) / (c0 + c90)
         I1 = (c45 - c135) / (c45 + c135)
@@ -29,9 +31,10 @@ class DataAnalyzer:
             'ITOT': ITOT
         }
 
-        self.fft_welch(signals, timestamps, spot_id)
+        self.fft_welch(signals, timestamps, spot_id, output_directory)
 
-    def fft_welch(self, signals, timestamps, spot_id, threshold=1):
+    def fft_welch(
+            self, signals, timestamps, spot_id, output_directory, threshold=1):
         plt.figure(figsize=(14, 8))
 
         for label, intensity in signals.items():
@@ -76,12 +79,16 @@ class DataAnalyzer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plot_filename = f'speed_time_diagram_spot_{spot_id}.png'
+        plot_filename = os.path.join(
+            output_directory, f'speed_time_diagram_spot_{spot_id}.png')
         plt.savefig(plot_filename)
         plt.close()
 
-    def save_raw_data(self, c90, c45, c135, c0, timestamps, spot_id):
-        with open(f'raw_data_spot_{spot_id}.txt', 'w') as f:
+    def save_raw_data(
+            self, c90, c45, c135, c0, timestamps, spot_id, output_directory):
+        raw_data_filename = os.path.join(
+            output_directory, f'raw_data_spot_{spot_id}.txt')
+        with open(raw_data_filename, 'w') as f:
             f.write(f"Spot ID: {spot_id}\n\n")
             f.write("Timestamps, c90, c45, c135, c0 values:\n")
             for ts, c90_val, c45_val, c135_val, c0_val in zip(
