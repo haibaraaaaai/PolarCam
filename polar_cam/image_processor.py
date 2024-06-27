@@ -73,9 +73,10 @@ class ImageProcessor:
                 unique_id += 1
 
         self.check_for_overlaps(blobs)
-        self.save_blobs_image(preprocessed_image, blobs, output_directory)
+        highlighted_image = self.save_blobs_image(
+            preprocessed_image, blobs, output_directory)
 
-        return self.spots
+        return highlighted_image, self.spots
 
     def get_spots(self):
         return self.spots
@@ -106,9 +107,7 @@ class ImageProcessor:
         plt.close()
 
         detected_image = cv2.imread(filename)
-        cv2.imshow("Detected Blobs", detected_image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        return detected_image
 
     def extract_polar_inten(self, image, roi):
         x, y, width, height = roi['x'], roi['y'], roi['width'], roi['height']
