@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Slot
 import cv2
 import os
-# import shutil
 import numpy as np
 import time
 from polar_cam.image_display import Display
@@ -37,6 +36,8 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.connect_signals()
         self.adjust_to_screen_size()
+
+        self.prompt_for_data_directory()
 
     def init_camera_parameters(self):
         self.min_framerate = None
@@ -588,7 +589,7 @@ class MainWindow(QMainWindow):
         self.processor.threshold = threshold
 
         image = self.camera_control.get_current_frame()
-        self.spots = self.processor.detect_spots(image)
+        self.spots = self.processor.detect_spots(image, self.data_directory)
 
     def reset_spot_detection_parameters(self):
         self.min_sigma_input.setText("10")
@@ -827,11 +828,9 @@ class MainWindow(QMainWindow):
                 return
             
             calculated_x = (
-                spot['x'] + self.original_settings['roi_x'] - self.current_x
-            )
+                spot['x'] + self.original_settings['roi_x'] - self.current_x)
             calculated_y = (
-                spot['y'] + self.original_settings['roi_y'] - self.current_y
-            )
+                spot['y'] + self.original_settings['roi_y'] - self.current_y)
             roi = {
                 'x': calculated_x,
                 'y': calculated_y,
@@ -845,18 +844,24 @@ class MainWindow(QMainWindow):
             intensities = {'90': [], '45': [], '135': [], '0': []}
             for frame in frames:
                 extracted = self.processor.extract_polar_inten(
-                    frame, roi
-                )
+                    frame, roi)
                 for key in intensities.keys():
                     intensities[key].append(extracted[key])
            
-            self.data_analyzer.analyze(
-                intensities, timestamps, self.current_spot_id
-            )
+            self.save_spot_data(spot_id, intensities, timestamps)
 
             self.current_spot_id = None
             self.is_recording = False
             self.process_next_spot()
+
+    def save_spot_data(self, spot_id, intensities, timestamps):
+        sample_folder = os.path.join(
+            self.data_directory, f"Sample {self.sample_counter}")
+        os.makedirs(sample_folder, exist_ok=True)
+
+        self.data_analyzer.analyze(
+            intensities, timestamps, spot_id, sample_folder)
+        self.sample_counter += 1
 
     def restore_camera_settings(self, settings):
         required_keys = [
