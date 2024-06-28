@@ -7,30 +7,20 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
 import datetime
-from polar_cam.utils import adjust_rectangle, blobs_overlap
+from polar_cam.utils import blobs_overlap
 
 class ImageProcessor:
-    def __init__(self, min_sigma=10, max_sigma=30, num_sigma=10, 
-                 threshold=0.3):
-        self.min_sigma = min_sigma
-        self.max_sigma = max_sigma
-        self.num_sigma = num_sigma
-        self.threshold = threshold
-        self.spots = []
+    def __init__():
+        pass
 
     def preprocess_image(self, image):
         image = exposure.equalize_adapthist(image, clip_limit=0.03)
         image = cv2.medianBlur((image * 255).astype(np.uint8), 5)
         return image
 
-    def detect_spots_log(self, image):
-        blobs = blob_log(
-            image, 
-            min_sigma=self.min_sigma, 
-            max_sigma=self.max_sigma, 
-            num_sigma=self.num_sigma, 
-            threshold=self.threshold
-        )
+    def detect_spots_log(
+            self, image, min_sigma, max_sigma, num_sigma, threshold):
+        blobs = blob_log(image, min_sigma, max_sigma, num_sigma, threshold)
         blobs[:, 2] = blobs[:, 2] * np.sqrt(2)
         return blobs
 
@@ -48,38 +38,21 @@ class ImageProcessor:
 
         return circularity >= 0.8
 
-    def detect_spots(self, image, output_directory):
+    def detect_spots(self, image, output_directory, min_sigma, 
+                     max_sigma, num_sigma, threshold):
         preprocessed_image = self.preprocess_image(image)
-        blobs = self.detect_spots_log(preprocessed_image)
+        blobs = self.detect_spots_log(
+            preprocessed_image, min_sigma, 
+            max_sigma, num_sigma, threshold)
 
-        unique_id = 0
-        self.spots.clear()
+        valid_blobs = [blob for blob in blobs 
+                       if self.shape_check(blob, preprocessed_image)]
 
-        for blob in blobs:
-            if self.shape_check(blob, preprocessed_image):
-                y, x, r = blob
-                w = h = int(r * 2)
-                x = int(x - r)
-                y = int(y - r)
-
-                rect_x, rect_y, rect_w, rect_h = adjust_rectangle(x, y, w, h)
-                self.spots.append({
-                    'id': unique_id, 
-                    'x': rect_x, 
-                    'y': rect_y, 
-                    'width': rect_w, 
-                    'height': rect_h
-                })
-                unique_id += 1
-
-        self.check_for_overlaps(blobs)
+        self.check_for_overlaps(valid_blobs)
         highlighted_image = self.save_blobs_image(
-            preprocessed_image, blobs, output_directory)
+            preprocessed_image, valid_blobs, output_directory)
 
-        return highlighted_image, self.spots
-
-    def get_spots(self):
-        return self.spots
+        return highlighted_image, valid_blobs
 
     def check_for_overlaps(self, blobs):
         for i in range(len(blobs)):
@@ -96,10 +69,9 @@ class ImageProcessor:
         plt.grid(True)
 
         for blob in blobs:
-            if self.shape_check(blob, image):
-                y, x, r = blob
-                c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
-                plt.gca().add_patch(c)
+            y, x, r = blob
+            c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
+            plt.gca().add_patch(c)
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         filename = os.path.join(output_directory, f'blobs_{timestamp}.png')
