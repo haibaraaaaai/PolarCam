@@ -10,7 +10,7 @@ import os
 import numpy as np
 import time
 from polar_cam.image_display import Display
-from polar_cam.utils import adjust_for_increment
+from polar_cam.utils import adjust_for_increment, adjust_rectangle
 
 class MainWindow(QMainWindow):
     def __init__(self, camera_control, image_processor, data_analyzer):
@@ -21,15 +21,15 @@ class MainWindow(QMainWindow):
 
         self.is_recording = False
         self.spots = []
+        self.blobs = []
         self.recorded_frames = []
         self.spots_to_process = []
         self.spot_frames_storage = {}
         self.spot_timestamps_storage = {}
+        self.spot_image = None
         self.start_time = None
         self.original_settings = None
         self.current_spot_id = None
-        self.processor = self.image_processor
-
         self.data_directory = None
         self.sample_counter = 1
 
@@ -37,7 +37,6 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.connect_signals()
         self.adjust_to_screen_size()
-
         self.prompt_for_data_directory()
 
     def init_camera_parameters(self):
@@ -105,10 +104,25 @@ class MainWindow(QMainWindow):
         detect_spots_button.setFixedSize(150, 30)
         buttons_layout.addWidget(detect_spots_button)
 
+        add_spot_button = QPushButton("Add Spot", self)
+        add_spot_button.clicked.connect(self.on_add_spot)
+        add_spot_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(add_spot_button)
+
+        remove_spot_button = QPushButton("Remove Spot", self)
+        remove_spot_button.clicked.connect(self.on_remove_spot)
+        remove_spot_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(remove_spot_button)
+
         scan_spot_button = QPushButton("Scan Spot", self)
         scan_spot_button.clicked.connect(self.on_scan_spot)
         scan_spot_button.setFixedSize(150, 30)
         buttons_layout.addWidget(scan_spot_button)
+
+        clear_spot_list_button = QPushButton("Clear Spot List", self)
+        clear_spot_list_button.clicked.connect(self.on_clear_spot_list)
+        clear_spot_list_button.setFixedSize(150, 30)
+        buttons_layout.addWidget(clear_spot_list_button)
 
         layout.addLayout(buttons_layout)
 
@@ -175,6 +189,7 @@ class MainWindow(QMainWindow):
 
     def toggle_acquisition(self):
         if self.camera_control.acquisition_running:
+            self.spot_image = self.camera_control.get_current_frame()
             self.camera_control.stop_acquisition()
             self.start_pause_button.setText("Start Acquisition")
         else:
@@ -187,6 +202,8 @@ class MainWindow(QMainWindow):
             self.record_button.setText("Start Recording")
             self.save_recording()
         else:
+            if not self.camera_control.acquisition_running:
+                self.toggle_acquisition()
             self.is_recording = True
             self.record_button.setText("Stop Recording")
             self.recorded_frames = []
@@ -569,32 +586,118 @@ class MainWindow(QMainWindow):
             pass
 
     def on_detect_spots(self):
-        self.spots.clear()
-        self.process_and_display_spots()
+        if self.camera_control.acquisition_running:
+            self.toggle_acquisition()
 
-    def process_and_display_spots(self):
-        try:
-            min_sigma = float(self.min_sigma_input.text())
-            max_sigma = float(self.max_sigma_input.text())
-            num_sigma = int(self.num_sigma_input.text())
-            threshold = float(self.threshold_input.text())
-        except ValueError as e:
-            QMessageBox.critical(
-                self, "Parameter Error", f"Invalid parameter values: {e}"
-            )
+        min_sigma = float(self.min_sigma_input.text())
+        max_sigma = float(self.max_sigma_input.text())
+        num_sigma = int(self.num_sigma_input.text())
+        threshold = float(self.threshold_input.text())
+        
+        highlighted_image, blobs = self.image_processor.detect_spots(
+            self.spot_image, self.data_directory, min_sigma, 
+            max_sigma, num_sigma, threshold)
+
+        if not blobs:
+            QMessageBox.information(self, "Info", "No valid spots detected.")
             return
 
-        self.processor.min_sigma = min_sigma
-        self.processor.max_sigma = max_sigma
-        self.processor.num_sigma = num_sigma
-        self.processor.threshold = threshold
-
-        image = self.camera_control.get_current_frame()
-        self.camera_control.stop_acquisition()
-        highlighted_image, self.spots = self.processor.detect_spots(
-            image, self.data_directory)
-
+        self.blobs = blobs
+        self.spots = self.convert_blobs_to_spots(blobs)
+        
         self.update_display(highlighted_image)
+
+    def convert_blobs_to_spots(self, blobs):
+        spots = []
+        unique_id = 0
+        for blob in blobs:
+            y, x, r = blob
+            w = h = int(r * 2)
+            x = int(x - r)
+            y = int(y - r)
+            rect_x, rect_y, rect_w, rect_h = adjust_rectangle(x, y, w, h)
+            spots.append({
+                'id': unique_id, 
+                'x': rect_x, 
+                'y': rect_y, 
+                'width': rect_w, 
+                'height': rect_h
+            })
+            unique_id += 1
+        return spots
+
+    def on_add_spot(self):
+        if self.camera_control.acquisition_running:
+            self.toggle_acquisition()
+        
+        self.image_display.set_mouse_press_callback(self.get_mouse_position)
+        self.status_bar.showMessage("Click on the image to add a spot.")
+
+    def on_remove_spot(self):
+        if self.camera_control.acquisition_running or not self.blobs:
+            return
+
+        self.image_display.set_mouse_press_callback(self.remove_spot_at)
+        self.status_bar.showMessage("Click on the spot to remove.")
+
+    def get_mouse_position(self, x, y):
+        self.add_spot_at(x, y)
+
+    def add_spot_at(self, x, y):
+        square_size = 32
+        half_square = square_size // 2
+        y_start = max(y - half_square, 0)
+        y_end = min(y + half_square, self.spot_image.shape[0])
+        x_start = max(x - half_square, 0)
+        x_end = min(x + half_square, self.spot_image.shape[1])
+        
+        roi = self.spot_image[y_start:y_end, x_start:x_end]
+
+        test_params = [(10, 30, 10, 0.3), (5, 40, 5, 0.2), (2, 50, 2, 0.1)]
+        for params in test_params:
+            _, blobs = self.image_processor.detect_spots(
+                roi, self.data_directory, *params)
+
+            if blobs:
+                for blob in blobs:
+                    blob[0] += max(y - half_square, 0)
+                    blob[1] += max(x - half_square, 0)
+                
+                self.blobs.extend(blobs)
+                self.spots = self.convert_blobs_to_spots(self.blobs)
+                blob_image = self.image_processor.save_blobs_image(
+                    self.spot_image, self.blobs, self.data_directory)
+                self.update_display(blob_image)
+                self.status_bar.showMessage("Spot added successfully.")
+                return
+
+        QMessageBox.information(
+            self, "Info", "No spot detected at the selected location.")
+
+    def remove_spot_at(self, x, y):
+        if not self.blobs:
+            return
+        
+        closest_blob = min(
+            self.blobs, key=lambda blob: (blob[1] - x) ** 2 + 
+            (blob[0] - y) ** 2)
+        self.blobs.remove(closest_blob)
+        self.spots = self.convert_blobs_to_spots(self.blobs)
+        
+        blob_image = self.image_processor.save_blobs_image(
+            self.spot_image, self.blobs, self.data_directory)
+        self.update_display(blob_image)
+        self.status_bar.showMessage("Spot removed successfully.")
+        
+        self.image_display.set_mouse_press_callback(None)
+
+    def on_clear_spot_list(self):
+        self.blobs.clear()
+        self.spots.clear()
+        self.status_bar.showMessage("Spot list cleared.")
+        if (self.spot_image is not None and 
+                not self.camera_control.acquisition_running):
+            self.update_display(self.spot_image)
 
     def update_display(self, image):
         height, width = image.shape
@@ -608,15 +711,18 @@ class MainWindow(QMainWindow):
         self.threshold_input.setText("0.3")
 
     def on_scan_spot(self):
-        if not hasattr(self, 'processor') or not self.processor.spots:
+        if not self.spots:
             QMessageBox.warning(
                 self, "Warning", 
                 "No spots detected or spot detection not yet performed."
             )
             return
 
+        if not self.camera_control.acquisition_running:
+            self.toggle_acquisition()
+
         self.original_settings = self.save_original_camera_settings()
-        self.spots_to_process = self.processor.spots.copy()
+        self.spots_to_process = self.spots.copy()
         self.process_next_spot()
 
     def process_next_spot(self):
@@ -820,9 +926,7 @@ class MainWindow(QMainWindow):
         self.spot_frames_storage[spot_id] = []
         self.spot_timestamps_storage[spot_id] = []
 
-        spot = next(
-            (s for s in self.processor.spots if s['id'] == spot_id), None
-        )
+        spot = next((s for s in self.spots if s['id'] == spot_id), None)
         if spot:
             self.adjust_camera_to_spot(spot)
             self.minimize_exposure()
@@ -853,7 +957,7 @@ class MainWindow(QMainWindow):
 
             intensities = {'90': [], '45': [], '135': [], '0': []}
             for frame in frames:
-                extracted = self.processor.extract_polar_inten(
+                extracted = self.image_processor.extract_polar_inten(
                     frame, roi)
                 for key in intensities.keys():
                     intensities[key].append(extracted[key])
