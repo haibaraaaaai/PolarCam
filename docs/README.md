@@ -47,7 +47,7 @@ polarcam
 For development, clone the repository and navigate to the project directory:
 
 ```sh
-git clone https://github.com/yourusername/PolarCam.git
+git clone https://github.com/haibaraaaaai/PolarCam.git
 cd PolarCam
 ```
 
