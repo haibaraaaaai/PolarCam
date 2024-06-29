@@ -25,8 +25,7 @@ def adjust_for_increment(value, increment, max_value):
             return rounded_value
 
 def calculate_image_rect(
-    display_width, display_height, image_width, image_height
-):
+    display_width, display_height, image_width, image_height):
     if image_width == 0 or image_height == 0:
         return None
 
@@ -50,20 +49,15 @@ def calculate_image_rect(
 def configure_device_component(node_map_remote_device, camera_error):
     component_selector = (
         node_map_remote_device.FindNode("ComponentSelector")
-        .CurrentEntry()
-        .SymbolicValue()
-    )
+        .CurrentEntry().SymbolicValue())
     component_enable = (
-        node_map_remote_device.FindNode("ComponentEnable")
-        .Value()
-    )
+        node_map_remote_device.FindNode("ComponentEnable").Value())
 
     if component_selector != "Raw" or not component_enable:
         try:
             node_map_remote_device.FindNode("ComponentSelector")\
                 .SetCurrentEntry("Raw")
-            node_map_remote_device.FindNode("ComponentEnable")\
-                .SetValue(True)
+            node_map_remote_device.FindNode("ComponentEnable").SetValue(True)
         except Exception as e:
             camera_error.emit(f"Warning: Error Setting Component: {e}")
 
@@ -71,8 +65,8 @@ def configure_device_component(node_map_remote_device, camera_error):
 def fetch_camera_parameters(node_map_remote_device, parameters, camera_error):
     try:
         param_names = [
-            "AcquisitionFrameRate", "ExposureTime", "Width", "Height",
-            "OffsetX", "OffsetY"
+            "AcquisitionFrameRate", "ExposureTime", "Width",
+            "Height", "OffsetX", "OffsetY"
         ]
         for param in param_names:
             node = node_map_remote_device.FindNode(param)

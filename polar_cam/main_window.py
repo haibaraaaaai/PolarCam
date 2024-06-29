@@ -24,14 +24,15 @@ class MainWindow(QMainWindow):
         self.blobs = []
         self.recorded_frames = []
         self.spots_to_process = []
-        self.spot_frames_storage = {}
         self.spot_timestamps_storage = {}
+        self.spot_intensities_storage = {}
         self.spot_image = None
         self.start_time = None
         self.original_settings = None
         self.current_spot_id = None
         self.data_directory = None
         self.sample_counter = 1
+        self.current_roi = None
 
         self.init_camera_parameters()
         self.setup_ui()
@@ -150,8 +151,7 @@ class MainWindow(QMainWindow):
     def setup_parameter_sidebar(self):
         self.parameter_sidebar = QDockWidget("Parameters", self)
         self.parameter_sidebar.setAllowedAreas(
-            Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
-        )
+            Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 
         sidebar_scroll_area = QScrollArea()  
         sidebar_widget = QWidget()
@@ -173,13 +173,11 @@ class MainWindow(QMainWindow):
     def adjust_to_screen_size(self):
         screen_geometry = QApplication.primaryScreen().availableGeometry()
         self.setGeometry(
-            0, 0, screen_geometry.width(), screen_geometry.height()
-        )
+            0, 0, screen_geometry.width(), screen_geometry.height())
 
     def toggle_parameter_sidebar(self):
         self.parameter_sidebar.setVisible(
-            not self.parameter_sidebar.isVisible()
-        )
+            not self.parameter_sidebar.isVisible())
 
     def create_statusbar(self):
         self.status_bar = QStatusBar()
@@ -210,8 +208,7 @@ class MainWindow(QMainWindow):
 
     def save_recording(self):
         filepath, _ = QFileDialog.getSaveFileName(
-            self, "Save Video", "", "Video Files (*.avi)"
-        )
+            self, "Save Video", "", "Video Files (*.avi)")
         if not filepath:
             return
                     
@@ -220,27 +217,29 @@ class MainWindow(QMainWindow):
         fps = round(self.current_framerate, 2)
         
         video = cv2.VideoWriter(
-            filepath, fourcc, fps, (width, height), isColor=False
-        )
+            filepath, fourcc, fps, (width, height), isColor=False)
 
-        for i, frame in enumerate(self.recorded_frames):            
+        for _, frame in enumerate(self.recorded_frames):            
             video.write(frame)
         
         video.release()
 
     def on_frame_captured(self, image_np_array):
-        if self.is_recording:
+        if self.is_recording and self.current_spot_id is None:
             self.recorded_frames.append(np.copy(image_np_array))
             
         if self.is_recording and self.current_spot_id is not None:
             elapsed_time = time.perf_counter() - self.start_time
-            self.spot_frames_storage.setdefault(
-                self.current_spot_id, []
-            ).append(np.copy(image_np_array))
 
             self.spot_timestamps_storage.setdefault(
-                self.current_spot_id, []
-            ).append(elapsed_time)
+                self.current_spot_id, []).append(elapsed_time)
+
+            extracted = self.image_processor.extract_polar_inten(
+                image_np_array, self.current_roi)
+            for key in self.spot_intensities_storage[
+                self.current_spot_id].keys():
+                self.spot_intensities_storage[
+                    self.current_spot_id][key].append(extracted[key])
 
     def create_framerate_group(self, layout):
         self.framerate_group = QGroupBox("AcquisitionFrameRate")
@@ -368,8 +367,7 @@ class MainWindow(QMainWindow):
         self.threshold_input = QLineEdit("0.3")
         self.reset_spot_detection_button = QPushButton("Reset to Defaults")
         self.reset_spot_detection_button.clicked.connect(
-            self.reset_spot_detection_parameters
-        )
+            self.reset_spot_detection_parameters)
 
         form_layout.addRow("Min Sigma", self.min_sigma_input)
         form_layout.addRow("Max Sigma", self.max_sigma_input)
@@ -384,15 +382,11 @@ class MainWindow(QMainWindow):
         try:
             input_framerate = float(self.framerate_input.text())
             self.camera_control.set_parameters(
-                {"AcquisitionFrameRate": {"current": input_framerate}}
-            )
+                {"AcquisitionFrameRate": {"current": input_framerate}})
         except Exception as e:
             QMessageBox.critical(
-                self, 
-                "Error Setting AcquisitionFrameRate", 
-                str(e), 
-                QMessageBox.Ok
-            )
+                self, "Error Setting AcquisitionFrameRate", 
+                str(e), QMessageBox.Ok)
 
     def validate_framerate_input(self):
         self.framerate_set_button.setEnabled(False)
@@ -403,8 +397,7 @@ class MainWindow(QMainWindow):
         try:
             input_framerate = float(self.framerate_input.text())
             is_framerate_valid = (
-                self.min_framerate <= input_framerate <= self.max_framerate
-            )
+                self.min_framerate <= input_framerate <= self.max_framerate)
 
             is_decimal_valid = True
             if "." in self.framerate_input.text():
@@ -421,12 +414,10 @@ class MainWindow(QMainWindow):
             input_exposure = float(self.exposure_input.text())
             input_exposure_us = input_exposure * 1000
             self.camera_control.set_parameters(
-                {"ExposureTime": {"current": input_exposure_us}}
-            )
+                {"ExposureTime": {"current": input_exposure_us}})
         except Exception as e:
             QMessageBox.critical(
-                self, "Error Setting ExposureTime", str(e), QMessageBox.Ok
-            )
+                self, "Error Setting ExposureTime", str(e), QMessageBox.Ok)
 
     def validate_exposure_input(self):
         self.exposure_set_button.setEnabled(False)
@@ -437,8 +428,7 @@ class MainWindow(QMainWindow):
         try:
             input_exposure = float(self.exposure_input.text())
             is_exposure_valid = (
-                self.min_exposure <= input_exposure <= self.max_exposure
-            )
+                self.min_exposure <= input_exposure <= self.max_exposure)
 
             is_decimal_valid = True
             if "." in self.exposure_input.text():
@@ -467,18 +457,15 @@ class MainWindow(QMainWindow):
             })
         except Exception as e:
             QMessageBox.critical(
-                self, "Error Setting ROI", str(e), QMessageBox.Ok
-            )
+                self, "Error Setting ROI", str(e), QMessageBox.Ok)
 
     def validate_roi_input(self):
         self.roi_set_button.setEnabled(False)
 
-        if any(
-            value is None for value in [
+        if any(value is None for value in [
                 self.min_w, self.max_w, self.inc_w,
                 self.min_h, self.max_h, self.inc_h
-            ]
-        ):
+            ]):
             return
 
         try:
@@ -509,8 +496,7 @@ class MainWindow(QMainWindow):
             })
         except Exception as e:
             QMessageBox.critical(
-                self, "Error Setting ROI offset", str(e), QMessageBox.Ok
-            )
+                self, "Error Setting ROI offset", str(e), QMessageBox.Ok)
 
     def validate_roi_offset_input(self):
         self.roi_offset_set_button.setEnabled(False)
@@ -543,8 +529,7 @@ class MainWindow(QMainWindow):
             })
         except Exception as e:
             QMessageBox.critical(
-                self, "Error Setting Gain", str(e), QMessageBox.Ok
-            )
+                self, "Error Setting Gain", str(e), QMessageBox.Ok)
 
     def validate_gain_input(self):
         self.gain_set_button.setEnabled(False)
@@ -570,13 +555,11 @@ class MainWindow(QMainWindow):
             is_digital_decimal_valid = True
             if "." in self.analog_gain_input.text():
                 fraction_part_analog = (
-                    self.analog_gain_input.text().split(".")[1]
-                )
+                    self.analog_gain_input.text().split(".")[1])
                 is_analog_decimal_valid = len(fraction_part_analog) <= 2
             if "." in self.digital_gain_input.text():
                 fraction_part_digital = (
-                    self.digital_gain_input.text().split(".")[1]
-                )
+                    self.digital_gain_input.text().split(".")[1])
                 is_digital_decimal_valid = len(fraction_part_digital) <= 2
             
             if (is_analog_valid and is_digital_valid and 
@@ -714,8 +697,7 @@ class MainWindow(QMainWindow):
         if not self.spots:
             QMessageBox.warning(
                 self, "Warning", 
-                "No spots detected or spot detection not yet performed."
-            )
+                "No spots detected or spot detection not yet performed.")
             return
 
         if not self.camera_control.acquisition_running:
@@ -723,7 +705,20 @@ class MainWindow(QMainWindow):
 
         self.original_settings = self.save_original_camera_settings()
         self.spots_to_process = self.spots.copy()
-        self.process_next_spot()
+        self.sample_folder = os.path.join(
+            self.data_directory, f"Sample {self.sample_counter}")
+        os.makedirs(self.sample_folder, exist_ok=True)
+
+        duration, ok = QInputDialog.getInt(
+            self, "Scan Duration", "Enter the scan duration in milliseconds:", 
+            value=10000, min=1000, max=6000000, step=1000
+        )
+
+        if ok:
+            self.scan_duration = duration
+            self.process_next_spot()
+        else:
+            QMessageBox.information(self, "Info", "Spot scanning canceled.")
 
     def process_next_spot(self):
         if self.spots_to_process:
@@ -734,6 +729,12 @@ class MainWindow(QMainWindow):
             )
         else:
             self.restore_camera_settings(self.original_settings)
+            self.analyze_all_spot_data()
+            self.sample_counter += 1
+            self.spots_to_process = []
+            self.spot_timestamps_storage = {}
+            self.spot_intensities_storage = {}
+            self.current_roi = None
             QMessageBox.information(self, "Info", "Spot scanning completed.")
 
     def save_original_camera_settings(self):
@@ -747,8 +748,7 @@ class MainWindow(QMainWindow):
             original_settings['framerate'] = self.current_framerate
         except ValueError as e:
             QMessageBox.critical(
-                self, "Error", "Invalid camera settings in input fields."
-            )
+                self, "Error", "Invalid camera settings in input fields.")
             return None
 
         return original_settings
@@ -810,13 +810,11 @@ class MainWindow(QMainWindow):
 
     def minimize_exposure(self):
         self.camera_control.set_parameters({
-            "ExposureTime": {"current": self.min_exposure * 1000}
-        })
+            "ExposureTime": {"current": self.min_exposure * 1000}})
 
     def maximize_framerate(self):
         self.camera_control.set_parameters({
-            "AcquisitionFrameRate": {"current": self.max_framerate}
-        })
+            "AcquisitionFrameRate": {"current": self.max_framerate}})
 
     def adjust_gain_to_target(self, max_pixel_value, target_value=150):
         if max_pixel_value == 0:
@@ -834,8 +832,7 @@ class MainWindow(QMainWindow):
             )
             current_total_gain = current_analog_gain * current_digital_gain
             required_total_gain = round(
-                (target_value / max_pixel_value) * current_total_gain, 2
-            )
+                (target_value / max_pixel_value) * current_total_gain, 2)
 
             new_analog_gain = min(
                 max(required_total_gain, self.min_analog_gain), 
@@ -915,23 +912,35 @@ class MainWindow(QMainWindow):
         self.start_time = time.perf_counter()
         self.is_recording = True
         QTimer.singleShot(
-            18000, lambda: self.stop_spot_recording(self.current_spot_id)
-        )
+            self.scan_duration, 
+            lambda: self.stop_spot_recording(self.current_spot_id))
 
     def start_spot_recording(self, spot_id):
         if self.current_spot_id is not None:
             return
 
         self.current_spot_id = spot_id
-        self.spot_frames_storage[spot_id] = []
         self.spot_timestamps_storage[spot_id] = []
+        self.spot_intensities_storage[spot_id] = {
+            '90': [], '45': [], '135': [], '0': []}
 
         spot = next((s for s in self.spots if s['id'] == spot_id), None)
         if spot:
             self.adjust_camera_to_spot(spot)
             self.minimize_exposure()
             self.maximize_framerate()
-        
+
+            calculated_x = spot['x'] + self.original_settings[
+                'roi_x'] - self.current_x
+            calculated_y = spot['y'] + self.original_settings[
+                'roi_y'] - self.current_y
+            self.current_roi = {
+                'x': calculated_x,
+                'y': calculated_y,
+                'width': spot['width'],
+                'height': spot['height']
+            }
+
         QTimer.singleShot(1000, self.scan_roi_and_adjust_gain)
 
     def stop_spot_recording(self, spot_id):
@@ -941,27 +950,9 @@ class MainWindow(QMainWindow):
                 print(f"Spot {spot_id} not found.")
                 return
             
-            calculated_x = (
-                spot['x'] + self.original_settings['roi_x'] - self.current_x)
-            calculated_y = (
-                spot['y'] + self.original_settings['roi_y'] - self.current_y)
-            roi = {
-                'x': calculated_x,
-                'y': calculated_y,
-                'width': spot['width'],
-                'height': spot['height']
-            }
-            
-            frames = self.spot_frames_storage.get(spot_id, [])
             timestamps = self.spot_timestamps_storage.get(spot_id, [])
+            intensities = self.spot_intensities_storage.get(spot_id, {})
 
-            intensities = {'90': [], '45': [], '135': [], '0': []}
-            for frame in frames:
-                extracted = self.image_processor.extract_polar_inten(
-                    frame, roi)
-                for key in intensities.keys():
-                    intensities[key].append(extracted[key])
-           
             self.save_spot_data(spot_id, intensities, timestamps)
 
             self.current_spot_id = None
@@ -969,13 +960,26 @@ class MainWindow(QMainWindow):
             self.process_next_spot()
 
     def save_spot_data(self, spot_id, intensities, timestamps):
-        sample_folder = os.path.join(
-            self.data_directory, f"Sample {self.sample_counter}")
-        os.makedirs(sample_folder, exist_ok=True)
+        raw_data_file = os.path.join(
+            self.sample_folder, f"spot_{spot_id}_data.npz")
+        
+        np.savez_compressed(
+            raw_data_file, intensities=intensities, timestamps=timestamps)
 
-        self.data_analyzer.analyze(
-            intensities, timestamps, spot_id, sample_folder)
-        self.sample_counter += 1
+    def analyze_all_spot_data(self):
+        for file in os.listdir(self.sample_folder):
+            if file.endswith('_data.npz'):
+                raw_data_file = os.path.join(self.sample_folder, file)
+                data = np.load(raw_data_file)
+                intensities = data['intensities'].item()
+                timestamps = data['timestamps']
+                spot_id = int(file.split('_')[1])
+
+                self.data_analyzer.analyze(
+                    intensities, timestamps, spot_id, self.sample_folder)
+        
+        print("All data analyzed.")
+        QMessageBox.information(self, "Info", "All data analyzed.")
 
     def restore_camera_settings(self, settings):
         required_keys = [
@@ -1019,26 +1023,20 @@ class MainWindow(QMainWindow):
             })
         except ValueError as e:
             QMessageBox.critical(
-                self, "Error", f"Failed to restore camera settings: {e}"
-            )
+                self, "Error", f"Failed to restore camera settings: {e}")
 
     def connect_signals(self):
         self.camera_control.image_acquired.connect(
-            self.image_display.on_image_received
-        )
+            self.image_display.on_image_received)
         self.camera_control.parameter_updated.connect(
-            self.on_parameter_updated
-        )
+            self.on_parameter_updated)
         self.camera_control.acquisition_updated.connect(
-            self.on_acquisition_updated
-        )
+            self.on_acquisition_updated)
         self.camera_control.camera_error.connect(self.on_camera_error)
         self.camera_control.acquisition_started.connect(
-            self.on_acquisition_started
-        )
+            self.on_acquisition_started)
         self.camera_control.acquisition_stopped.connect(
-            self.on_acquisition_stopped
-        )
+            self.on_acquisition_stopped)
         self.camera_control.frame_captured.connect(self.on_frame_captured)
 
     def closeEvent(self, event):
@@ -1057,22 +1055,18 @@ class MainWindow(QMainWindow):
             self.max_framerate = framerate_info.get('max', None)
             self.current_framerate = framerate_info.get('current', None)
             self.min_framerate_label.setText(
-                f"Min Frame Rate: {round(self.min_framerate, 2)} fps"
-            )
+                f"Min Frame Rate: {round(self.min_framerate, 2)} fps")
             self.max_framerate_label.setText(
-                f"Max Frame Rate: {round(self.max_framerate, 2)} fps"
-            )
+                f"Max Frame Rate: {round(self.max_framerate, 2)} fps")
             self.framerate_input.setText(str(round(self.current_framerate, 2)))
             
             exposure_info = parameters.get("ExposureTime", {})
             self.min_exposure = exposure_info.get('min', None) / 1000
             self.max_exposure = exposure_info.get('max', None) / 1000
             self.min_exposure_label.setText(
-                f"Min Exposure: {round(self.min_exposure, 2)} ms"
-            )
+                f"Min Exposure: {round(self.min_exposure, 2)} ms")
             self.max_exposure_label.setText(
-                f"Max Exposure: {round(self.max_exposure, 2)} ms"
-            )
+                f"Max Exposure: {round(self.max_exposure, 2)} ms")
             self.current_exposure = exposure_info.get('current', None) / 1000
             self.exposure_input.setText(str(round(self.current_exposure, 2)))
             
@@ -1117,28 +1111,22 @@ class MainWindow(QMainWindow):
             self.max_analog_gain = analog_info.get('max', None)
             self.current_analog_gain = analog_info.get('current', None)
             self.min_analog_gain_label.setText(
-                f"Min AnalogGain: {round(self.min_analog_gain, 2)}"
-            )
+                f"Min AnalogGain: {round(self.min_analog_gain, 2)}")
             self.max_analog_gain_label.setText(
-                f"Max AnalogGain: {round(self.max_analog_gain, 2)}"
-            )
+                f"Max AnalogGain: {round(self.max_analog_gain, 2)}")
             self.analog_gain_input.setText(
-                str(round(self.current_analog_gain, 2))
-            )
+                str(round(self.current_analog_gain, 2)))
             
             digital_info = parameters.get("DigitalGain", {})
             self.min_digital_gain = digital_info.get('min', None)
             self.max_digital_gain = digital_info.get('max', None)
             self.current_digital_gain = digital_info.get('current', None)
             self.min_digital_gain_label.setText(
-                f"Min DigitalGain: {round(self.min_digital_gain, 2)}"
-            )
+                f"Min DigitalGain: {round(self.min_digital_gain, 2)}")
             self.max_digital_gain_label.setText(
-                f"Max DigitalGain: {round(self.max_digital_gain, 2)}"
-            )
+                f"Max DigitalGain: {round(self.max_digital_gain, 2)}")
             self.digital_gain_input.setText(
-                str(round(self.current_digital_gain, 2))
-            )
+                str(round(self.current_digital_gain, 2)))
         except Exception as e:
             QMessageBox.critical(
                 self, "Parameter Update Error",
@@ -1150,14 +1138,12 @@ class MainWindow(QMainWindow):
     def on_acquisition_updated(self, frame_counter, error_counter):
         fps = round(self.current_framerate, 2)
         self.label_infos.setText(
-            f"Acquired: {frame_counter}, Errors: {error_counter}, fps: {fps}"
-        )
+            f"Acquired: {frame_counter}, Errors: {error_counter}, fps: {fps}")
 
     @Slot(str)
     def on_camera_error(self, error_message):
         QMessageBox.critical(
-            self, "Camera Error", error_message, QMessageBox.Ok
-        )
+            self, "Camera Error", error_message, QMessageBox.Ok)
 
     @Slot()
     def on_acquisition_started(self):
