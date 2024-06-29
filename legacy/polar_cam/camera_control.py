@@ -62,8 +62,7 @@ class CameraControl(QObject):
             for device in device_manager.Devices():
                 if device.IsOpenable():
                     self.device = device.OpenDevice(
-                        ids_peak.DeviceAccessType_Control
-                    )
+                        ids_peak.DeviceAccessType_Control)
                     break
 
             if self.device is None:
@@ -71,12 +70,10 @@ class CameraControl(QObject):
                 return False
 
             self.node_map_remote_device = (
-                self.device.RemoteDevice().NodeMaps()[0]
-            )
+                self.device.RemoteDevice().NodeMaps()[0])
 
             configure_device_component(
-                self.node_map_remote_device, self.camera_error
-            )
+                self.node_map_remote_device, self.camera_error)
 
             datastreams = self.device.DataStreams()
             if datastreams.empty():
@@ -100,11 +97,9 @@ class CameraControl(QObject):
         )
         if self.parameters and self.acquisition_running:
             current_framerate = self.parameters[
-                "AcquisitionFrameRate"
-            ]["current"]
+                "AcquisitionFrameRate"]["current"]
             self.acquisition_timer.setInterval(
-                1000 / current_framerate if current_framerate > 0 else 1000
-            )
+                1000 / current_framerate if current_framerate > 0 else 1000)
 
         self.parameter_updated.emit(self.parameters)
 
@@ -117,19 +112,15 @@ class CameraControl(QObject):
             return False
 
         payload_size = (
-            self.node_map_remote_device
-            .FindNode("PayloadSize")
-            .Value()
-        )
+            self.node_map_remote_device.FindNode("PayloadSize").Value())
         buffer_count_max = self.datastream.NumBuffersAnnouncedMinRequired()
-        for i in range(buffer_count_max):
+        for _ in range(buffer_count_max):
             buffer = self.datastream.AllocAndAnnounceBuffer(payload_size)
             self.datastream.QueueBuffer(buffer)
 
         current_framerate = self.parameters["AcquisitionFrameRate"]["current"]
         self.acquisition_timer.setInterval(
-            1000 / current_framerate if current_framerate > 0 else 1000
-        )
+            1000 / current_framerate if current_framerate > 0 else 1000)
         self.acquisition_timer.setSingleShot(False)
         self.acquisition_timer.timeout.connect(self.fetch_frame)
 
@@ -137,8 +128,7 @@ class CameraControl(QObject):
             self.datastream.StartAcquisition()
             self.node_map_remote_device.FindNode("AcquisitionStart").Execute()
             self.node_map_remote_device.FindNode(
-                "AcquisitionStart"
-            ).WaitUntilDone()
+                "AcquisitionStart").WaitUntilDone()
         except Exception as e:
             self.camera_error.emit(f"Exception in start_acquisition: {str(e)}")
             return False
@@ -155,8 +145,7 @@ class CameraControl(QObject):
         try:
             self.node_map_remote_device.FindNode("AcquisitionStop").Execute()
             self.datastream.StopAcquisition(
-                ids_peak.AcquisitionStopMode_Default
-            )
+                ids_peak.AcquisitionStopMode_Default)
             self.datastream.Flush(ids_peak.DataStreamFlushMode_DiscardAll)
 
             for buffer in self.datastream.AnnouncedBuffers():
@@ -185,8 +174,7 @@ class CameraControl(QObject):
             self.datastream.QueueBuffer(buffer)
 
             image_np_array = ipl_image.get_numpy_1D().reshape(
-                (ipl_image.Height(), ipl_image.Width())
-            )
+                (ipl_image.Height(), ipl_image.Width()))
             image_qt = QImage(
                 image_np_array.data,
                 image_np_array.shape[1],
@@ -200,8 +188,7 @@ class CameraControl(QObject):
             self.frame_captured.emit(self.latest_frame)
             self.frame_counter += 1
             self.acquisition_updated.emit(
-                self.frame_counter, self.error_counter
-            )
+                self.frame_counter, self.error_counter)
         except Exception as e:
             self.error_counter += 1
             self.camera_error.emit(f"Error fetching frame: {str(e)}")

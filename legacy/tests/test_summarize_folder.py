@@ -13,7 +13,10 @@ def select_folder():
 def process_files_in_folder(folder_path):
     for root, _, files in os.walk(folder_path):
         for file in files:
-            if file.startswith('raw_data_spot_') and file.endswith('.txt'):
+            if (
+                (file.startswith('spot_') and file.endswith('_data.npz')) or
+                (file.startswith('raw_data_spot_') and file.endswith('.txt'))
+            ):
                 file_path = os.path.join(root, file)
                 print(f"Processing file: {file_path}")
                 try:

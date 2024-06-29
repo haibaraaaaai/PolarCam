@@ -16,9 +16,6 @@ class DataAnalyzer:
         c135 = np.array(intensities['135'])
         c0 = np.array(intensities['0'])
 
-        self.save_raw_data(
-            c90, c45, c135, c0, timestamps, spot_id, output_directory)
-
         I0 = (c0 - c90) / (c0 + c90)
         I1 = (c45 - c135) / (c45 + c135)
         ANIS = I0 + 1j * I1
@@ -83,15 +80,3 @@ class DataAnalyzer:
             output_directory, f'speed_time_diagram_spot_{spot_id}.png')
         plt.savefig(plot_filename)
         plt.close()
-
-    def save_raw_data(
-            self, c90, c45, c135, c0, timestamps, spot_id, output_directory):
-        raw_data_filename = os.path.join(
-            output_directory, f'raw_data_spot_{spot_id}.txt')
-        with open(raw_data_filename, 'w') as f:
-            f.write(f"Spot ID: {spot_id}\n\n")
-            f.write("Timestamps, c90, c45, c135, c0 values:\n")
-            for ts, c90_val, c45_val, c135_val, c0_val in zip(
-                timestamps, c90, c45, c135, c0
-            ):
-                f.write(f"{ts}, {c90_val}, {c45_val}, {c135_val}, {c0_val}\n")
