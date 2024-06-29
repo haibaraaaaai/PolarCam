@@ -41,8 +41,7 @@ class CustomGraphicsScene(QGraphicsScene):
         image_height = self._image.height()
 
         coords = calculate_image_rect(
-            display_width, display_height, image_width, image_height
-        )
+            display_width, display_height, image_width, image_height)
         if coords is not None:
             image_pos_x, image_pos_y, image_width, image_height = coords
             rect = QRectF(image_pos_x, image_pos_y, image_width, image_height)

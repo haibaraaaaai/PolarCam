@@ -42,8 +42,7 @@ class ImageProcessor:
                      max_sigma, num_sigma, threshold):
         preprocessed_image = self.preprocess_image(image)
         blobs = self.detect_spots_log(
-            preprocessed_image, min_sigma, 
-            max_sigma, num_sigma, threshold)
+            preprocessed_image, min_sigma, max_sigma, num_sigma, threshold)
 
         valid_blobs = [blob for blob in blobs 
                        if self.shape_check(blob, preprocessed_image)]

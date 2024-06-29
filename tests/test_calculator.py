@@ -23,6 +23,16 @@ def parse_file(file_path):
     
     return timestamps, c90_values, c45_values, c135_values, c0_values
 
+def parse_npz_file(file_path):
+    data = np.load(file_path)
+    timestamps = data['timestamps']
+    c90_values = data['intensities']['c90']
+    c45_values = data['intensities']['c45']
+    c135_values = data['intensities']['c135']
+    c0_values = data['intensities']['c0']
+    
+    return timestamps, c90_values, c45_values, c135_values, c0_values
+
 class FourkasCalculator:
     def __init__(self, NA, nw, tweaktheta):
         self.NA = NA
@@ -67,10 +77,17 @@ def select_and_calculate(file_path=None):
         root.withdraw()
         file_path = filedialog.askopenfilename(
             title="Select a file",
-            filetypes=(("Text files", "*.txt"), ("All files", "*.*"))
+            filetypes=(("Text files", "*.txt"),
+                        ("NPZ files", "*.npz"), ("All files", "*.*"))
         )
     if file_path:
-        timestamps, c90, c45, c135, c0 = parse_file(file_path)
+        if file_path.endswith('.txt'):
+            timestamps, c90, c45, c135, c0 = parse_file(file_path)
+        elif file_path.endswith('.npz'):
+            timestamps, c90, c45, c135, c0 = parse_npz_file(file_path)
+        else:
+            print("Unsupported file type")
+            return None, None
 
         calculator = FourkasCalculator(NA=1.0, nw=1.33, tweaktheta=0.5)
         
