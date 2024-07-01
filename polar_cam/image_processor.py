@@ -10,7 +10,7 @@ import datetime
 from polar_cam.utils import blobs_overlap
 
 class ImageProcessor:
-    def __init__():
+    def __init__(self):
         pass
 
     def preprocess_image(self, image):
