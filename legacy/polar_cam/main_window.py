@@ -613,7 +613,7 @@ class MainWindow(QMainWindow):
         if self.camera_control.acquisition_running:
             self.toggle_acquisition()
         
-        self.image_display.set_mouse_press_callback(self.get_mouse_position)
+        self.image_display.set_mouse_press_callback(self.add_spot_at)
         self.status_bar.showMessage("Click on the image to add a spot.")
 
     def on_remove_spot(self):
@@ -622,9 +622,6 @@ class MainWindow(QMainWindow):
 
         self.image_display.set_mouse_press_callback(self.remove_spot_at)
         self.status_bar.showMessage("Click on the spot to remove.")
-
-    def get_mouse_position(self, x, y):
-        self.add_spot_at(x, y)
 
     def add_spot_at(self, x, y):
         square_size = 32
@@ -656,6 +653,8 @@ class MainWindow(QMainWindow):
 
         QMessageBox.information(
             self, "Info", "No spot detected at the selected location.")
+        
+        self.image_display.set_mouse_press_callback(None)
 
     def remove_spot_at(self, x, y):
         if not self.blobs:
