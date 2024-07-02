@@ -133,17 +133,11 @@ class MainWindow(QMainWindow):
             os.path.join(os.getcwd(), "PolarCam", "data")
         )
         if directory:
-            folder_name, ok = QInputDialog.getText(
-                self, "Folder Name", "Enter the folder name:")
-            if ok and folder_name:
-                self.data_directory = os.path.join(directory, folder_name)
-                os.makedirs(self.data_directory, exist_ok=True)
-                QMessageBox.information(
-                    self, "Directory Created",
-                      f"Data will be saved in: {self.data_directory}")
-            else:
-                QMessageBox.warning(
-                    self, "Invalid Input", "Folder name was not provided.")
+            self.data_directory = directory
+            QMessageBox.information(
+                self, "Directory Selected",
+                f"Data will be saved in: {self.data_directory}"
+            )
         else:
             QMessageBox.warning(
                 self, "No Directory Selected", "No directory was selected.")
@@ -626,10 +620,10 @@ class MainWindow(QMainWindow):
     def add_spot_at(self, x, y):
         square_size = 32
         half_square = square_size // 2
-        y_start = max(y - half_square, 0)
-        y_end = min(y + half_square, self.spot_image.shape[0])
-        x_start = max(x - half_square, 0)
-        x_end = min(x + half_square, self.spot_image.shape[1])
+        y_start = int(max(y - half_square, 0))
+        y_end = int(min(y + half_square, self.spot_image.shape[0]))
+        x_start = int(max(x - half_square, 0))
+        x_end = int(min(x + half_square, self.spot_image.shape[1]))
         
         roi = self.spot_image[y_start:y_end, x_start:x_end]
 
@@ -653,7 +647,6 @@ class MainWindow(QMainWindow):
 
         QMessageBox.information(
             self, "Info", "No spot detected at the selected location.")
-        
         self.image_display.set_mouse_press_callback(None)
 
     def remove_spot_at(self, x, y):
@@ -682,8 +675,14 @@ class MainWindow(QMainWindow):
             self.update_display(self.spot_image)
 
     def update_display(self, image):
-        height, width = image.shape
-        qimage = QImage(image.data, width, height, QImage.Format_RGB888)
+        if len(image.shape) == 2:
+            height, width = image.shape
+            qimage = QImage(
+                image.data, width, height, QImage.Format_Grayscale8)
+        else:
+            height, width, _ = image.shape
+            qimage = QImage(image.data, width, height, QImage.Format_RGB888)
+        
         self.image_display.on_image_received(qimage)
 
     def reset_spot_detection_parameters(self):

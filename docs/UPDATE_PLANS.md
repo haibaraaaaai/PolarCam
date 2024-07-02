@@ -5,3 +5,4 @@ scale. (10s at spot 1, 10s at spot 2, then jump back to spot 1, etc...)
 4. Test new save data.
 5. Test add / remove spot.
 6. Input box for scanning time.
+7. Change save folder.

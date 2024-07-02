@@ -44,6 +44,6 @@ class CustomGraphicsScene(QGraphicsScene):
 
     def mousePressEvent(self, event: QMouseEvent):
         if self._parent.mouse_press_callback:
-            scene_pos = self._parent.mapToScene(event.pos())
+            scene_pos = self._parent.mapToScene(event.pos().toPoint())
             self._parent.mouse_press_callback(scene_pos.x(), scene_pos.y())
         super().mousePressEvent(event)
