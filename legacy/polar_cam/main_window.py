@@ -571,9 +571,11 @@ class MainWindow(QMainWindow):
         num_sigma = int(self.num_sigma_input.text())
         threshold = float(self.threshold_input.text())
         
-        highlighted_image, blobs = self.image_processor.detect_spots(
-            self.spot_image, self.data_directory, min_sigma, 
-            max_sigma, num_sigma, threshold)
+        blobs = self.image_processor.detect_spots(
+            self.spot_image, min_sigma, max_sigma, num_sigma, threshold)
+
+        self.image_processor.generate_highlighted_image(
+            self.spot_image, blobs, self.data_directory)
 
         if not blobs:
             QMessageBox.information(self, "Info", "No valid spots detected.")
@@ -581,8 +583,6 @@ class MainWindow(QMainWindow):
 
         self.blobs = blobs
         self.spots = self.convert_blobs_to_spots(blobs)
-        
-        self.update_display(highlighted_image)
 
     def convert_blobs_to_spots(self, blobs):
         spots = []
@@ -629,8 +629,7 @@ class MainWindow(QMainWindow):
 
         test_params = [(10, 30, 10, 0.3), (5, 40, 5, 0.2), (2, 50, 2, 0.1)]
         for params in test_params:
-            _, blobs = self.image_processor.detect_spots(
-                roi, self.data_directory, *params)
+            blobs = self.image_processor.detect_spots(roi, *params)
 
             if blobs:
                 for blob in blobs:
@@ -639,9 +638,9 @@ class MainWindow(QMainWindow):
                 
                 self.blobs.extend(blobs)
                 self.spots = self.convert_blobs_to_spots(self.blobs)
-                blob_image = self.image_processor.save_blobs_image(
+                self.image_processor.generate_highlighted_image(
                     self.spot_image, self.blobs, self.data_directory)
-                self.update_display(blob_image)
+
                 self.status_bar.showMessage("Spot added successfully.")
                 return
 
@@ -659,9 +658,8 @@ class MainWindow(QMainWindow):
         self.blobs.remove(closest_blob)
         self.spots = self.convert_blobs_to_spots(self.blobs)
         
-        blob_image = self.image_processor.save_blobs_image(
+        self.image_processor.generate_highlighted_image(
             self.spot_image, self.blobs, self.data_directory)
-        self.update_display(blob_image)
         self.status_bar.showMessage("Spot removed successfully.")
         
         self.image_display.set_mouse_press_callback(None)
@@ -670,20 +668,7 @@ class MainWindow(QMainWindow):
         self.blobs.clear()
         self.spots.clear()
         self.status_bar.showMessage("Spot list cleared.")
-        if (self.spot_image is not None and 
-                not self.camera_control.acquisition_running):
-            self.update_display(self.spot_image)
-
-    def update_display(self, image):
-        if len(image.shape) == 2:
-            height, width = image.shape
-            qimage = QImage(
-                image.data, width, height, QImage.Format_Grayscale8)
-        else:
-            height, width, _ = image.shape
-            qimage = QImage(image.data, width, height, QImage.Format_RGB888)
-        
-        self.image_display.on_image_received(qimage)
+        self.toggle_acquisition()
 
     def reset_spot_detection_parameters(self):
         self.min_sigma_input.setText("10")
