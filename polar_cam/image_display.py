@@ -15,6 +15,19 @@ class Display(QGraphicsView):
         self._scene.set_image(image)
         self.update()
 
+    def update_display(self, image):
+        if len(image.shape) == 3:
+            height, width, _ = image.shape
+            bytes_per_line = 3 * width
+            qimage = QImage(
+                image.data, width, height, 
+                bytes_per_line, QImage.Format_RGB888)
+        else:
+            height, width = image.shape
+            qimage = QImage(
+                image.data, width, height, width, QImage.Format_Grayscale8)
+        self.on_image_received(qimage)
+
     def set_mouse_press_callback(self, callback):
         self.mouse_press_callback = callback
 

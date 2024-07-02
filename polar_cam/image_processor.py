@@ -10,8 +10,8 @@ import datetime
 from polar_cam.utils import blobs_overlap
 
 class ImageProcessor:
-    def __init__(self):
-        pass
+    def __init__(self, display):
+        self.display = display
 
     def preprocess_image(self, image):
         image = exposure.equalize_adapthist(image, clip_limit=0.03)
@@ -38,8 +38,7 @@ class ImageProcessor:
 
         return circularity >= 0.8
 
-    def detect_spots(self, image, output_directory, min_sigma, 
-                     max_sigma, num_sigma, threshold):
+    def detect_spots(self, image, min_sigma, max_sigma, num_sigma, threshold):
         preprocessed_image = self.preprocess_image(image)
         blobs = self.detect_spots_log(
             preprocessed_image, min_sigma, max_sigma, num_sigma, threshold)
@@ -48,10 +47,8 @@ class ImageProcessor:
                        if self.shape_check(blob, preprocessed_image)]
 
         self.check_for_overlaps(valid_blobs)
-        highlighted_image = self.save_blobs_image(
-            preprocessed_image, valid_blobs, output_directory)
 
-        return highlighted_image, valid_blobs
+        return valid_blobs
 
     def check_for_overlaps(self, blobs):
         for i in range(len(blobs)):
@@ -59,26 +56,38 @@ class ImageProcessor:
                 if blobs_overlap(blobs[i], blobs[j]):
                     print(f"Blobs {i} and {j} overlap.")
 
-    def save_blobs_image(self, image, blobs, output_directory):
-        plt.figure(figsize=(10, 10))
-        plt.imshow(image, cmap='gray')
-        plt.title("Detected Blobs with Laplacian of Gaussian")
-        plt.xlabel("X-axis")
-        plt.ylabel("Y-axis")
-        plt.grid(True)
-
+    def generate_highlighted_image(self, image, blobs, output_directory):
+        fig_display, ax_display = plt.subplots(figsize=(10, 10))
+        ax_display.imshow(image)
         for blob in blobs:
             y, x, r = blob
             c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
-            plt.gca().add_patch(c)
+            ax_display.add_patch(c)
+        ax_display.axis('off')
+        ax_display.set_xticks([])
+        ax_display.set_yticks([])
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        
+        fig_display.canvas.draw()
+        buffer_display = np.frombuffer(
+            fig_display.canvas.tostring_rgb(), dtype=np.uint8)
+        buffer_display = buffer_display.reshape(
+            fig_display.canvas.get_width_height()[::-1] + (3,))
+        plt.close(fig_display)
+
+        self.display.update_display(buffer_display)
+
+        fig_save, ax_save = plt.subplots(figsize=(10, 10))
+        ax_save.imshow(image)
+        ax_save.set_title("Detected Blobs with Laplacian of Gaussian")
+        ax_save.set_xlabel("X-axis")
+        ax_save.set_ylabel("Y-axis")
+        ax_save.grid(True)
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         filename = os.path.join(output_directory, f'blobs_{timestamp}.png')
-        plt.savefig(filename)
-        plt.close()
-
-        detected_image = cv2.imread(filename)
-        return detected_image
+        plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+        plt.close(fig_save)
 
     def extract_polar_inten(self, image, roi):
         x, y, width, height = roi['x'], roi['y'], roi['width'], roi['height']
