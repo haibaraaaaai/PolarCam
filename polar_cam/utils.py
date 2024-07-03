@@ -24,8 +24,7 @@ def adjust_for_increment(value, increment, max_value):
         else:
             return rounded_value
 
-def calculate_image_rect(
-    display_width, display_height, image_width, image_height):
+def calculate_image_rect(display_width, display_height, image_width, image_height):
     if image_width == 0 or image_height == 0:
         return None
 
@@ -33,8 +32,8 @@ def calculate_image_rect(
     ratio2 = image_width / image_height
 
     if ratio1 > ratio2:
-        image_width = display_height * ratio2
         image_height = display_height
+        image_width = display_height * ratio2
     else:
         image_width = display_width
         image_height = display_width / ratio2
@@ -44,7 +43,7 @@ def calculate_image_rect(
     image_pos_x = int(image_pos_x)
     image_pos_y = int(image_pos_y)
 
-    return image_pos_x, image_pos_y, image_width, image_height
+    return image_pos_x, image_pos_y, int(image_width), int(image_height)
 
 def configure_device_component(node_map_remote_device, camera_error):
     component_selector = (
