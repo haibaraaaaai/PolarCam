@@ -57,8 +57,9 @@ class ImageProcessor:
                     print(f"Blobs {i} and {j} overlap.")
 
     def generate_highlighted_image(self, image, blobs, output_directory):
+        # Display the image with detected spots
         fig_display, ax_display = plt.subplots(figsize=(10, 10))
-        ax_display.imshow(image)
+        ax_display.imshow(image, cmap='gray', vmin=0, vmax=255)  # Ensure grayscale image
         for blob in blobs:
             y, x, r = blob
             c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
@@ -73,16 +74,33 @@ class ImageProcessor:
             fig_display.canvas.tostring_rgb(), dtype=np.uint8)
         buffer_display = buffer_display.reshape(
             fig_display.canvas.get_width_height()[::-1] + (3,))
-        plt.close(fig_display)
 
-        self.display.update_display(buffer_display)
+        # Convert BGR to RGB
+        buffer_display_rgb = cv2.cvtColor(buffer_display, cv2.COLOR_BGR2RGB)
 
+        # Directly display the image using OpenCV to verify
+        cv2.imshow('Highlighted Image', buffer_display_rgb)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        print("Updating display with highlighted image...")
+        self.display.update_display(buffer_display_rgb)
+        print("Display updated.")
+        
+        plt.close(fig_display)  # Close figure after updating display
+
+        # Save the image with axes, titles, and grid
         fig_save, ax_save = plt.subplots(figsize=(10, 10))
-        ax_save.imshow(image)
+        ax_save.imshow(image, cmap='gray', vmin=0, vmax=255)  # Ensure grayscale image
         ax_save.set_title("Detected Blobs with Laplacian of Gaussian")
         ax_save.set_xlabel("X-axis")
         ax_save.set_ylabel("Y-axis")
         ax_save.grid(True)
+
+        for blob in blobs:
+            y, x, r = blob
+            c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
+            ax_save.add_patch(c)
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         filename = os.path.join(output_directory, f'blobs_{timestamp}.png')
