@@ -59,7 +59,8 @@ class ImageProcessor:
     def generate_highlighted_image(self, image, blobs, output_directory):
         # Display the image with detected spots
         fig_display, ax_display = plt.subplots(figsize=(10, 10))
-        ax_display.imshow(image, cmap='gray', vmin=0, vmax=255)  # Ensure grayscale image
+        ax_display.imshow(image, cmap='gray', vmin=0, vmax=255)
+        # Ensure grayscale image
         for blob in blobs:
             y, x, r = blob
             c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
@@ -91,7 +92,8 @@ class ImageProcessor:
 
         # Save the image with axes, titles, and grid
         fig_save, ax_save = plt.subplots(figsize=(10, 10))
-        ax_save.imshow(image, cmap='gray', vmin=0, vmax=255)  # Ensure grayscale image
+        ax_save.imshow(image, cmap='gray', vmin=0, vmax=255)
+        # Ensure grayscale image
         ax_save.set_title("Detected Blobs with Laplacian of Gaussian")
         ax_save.set_xlabel("X-axis")
         ax_save.set_ylabel("Y-axis")

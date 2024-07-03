@@ -28,11 +28,13 @@ class Display(QGraphicsView):
         if len(image.shape) == 3:
             height, width, _ = image.shape
             bytes_per_line = 3 * width
-            qimage = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            qimage = QImage(image.data, width, 
+                            height, bytes_per_line, QImage.Format_RGB888)
         else:
             height, width = image.shape
             bytes_per_line = width
-            qimage = QImage(image.data, width, height, bytes_per_line, QImage.Format_Grayscale8)
+            qimage = QImage(image.data, width, 
+                            height, bytes_per_line, QImage.Format_Grayscale8)
         print("Converted numpy array to QImage.")
         self.on_image_received(qimage)
         self.repaint()
@@ -72,7 +74,8 @@ class CustomGraphicsScene(QGraphicsScene):
         print(f"Display size: {display_width}x{display_height}")
         print(f"Image size: {image_width}x{image_height}")
 
-        coords = calculate_image_rect(display_width, display_height, image_width, image_height)
+        coords = calculate_image_rect(
+            display_width, display_height, image_width, image_height)
         if coords is not None:
             image_pos_x, image_pos_y, image_width, image_height = coords
             rect = QRectF(image_pos_x, image_pos_y, image_width, image_height)
@@ -80,3 +83,9 @@ class CustomGraphicsScene(QGraphicsScene):
             print(f"Background drawn with image at {rect}.")
         else:
             print("Invalid coordinates for drawing image.")
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if self._parent.mouse_press_callback:
+            scene_pos = self._parent.mapToScene(event.pos().toPoint())
+            self._parent.mouse_press_callback(scene_pos.x(), scene_pos.y())
+        super().mousePressEvent(event)

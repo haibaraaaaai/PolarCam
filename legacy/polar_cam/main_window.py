@@ -570,7 +570,7 @@ class MainWindow(QMainWindow):
         num_sigma = int(self.num_sigma_input.text())
         threshold = float(self.threshold_input.text())
 
-        print(f"Detecting spots with parameters: min_sigma={min_sigma}, max_sigma={max_sigma}, num_sigma={num_sigma}, threshold={threshold}")
+        print(f"Detecting spots")
 
         blobs = self.image_processor.detect_spots(
             self.spot_image, min_sigma, max_sigma, num_sigma, threshold)

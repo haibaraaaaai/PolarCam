@@ -24,7 +24,8 @@ def adjust_for_increment(value, increment, max_value):
         else:
             return rounded_value
 
-def calculate_image_rect(display_width, display_height, image_width, image_height):
+def calculate_image_rect(
+        display_width, display_height, image_width, image_height):
     if image_width == 0 or image_height == 0:
         return None
 
