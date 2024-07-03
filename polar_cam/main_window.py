@@ -3,7 +3,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QDockWidget, QFormLayout, QGroupBox, QMessageBox,
     QStatusBar, QFileDialog, QScrollArea, QApplication, QInputDialog
 )
-from PySide6.QtGui import QImage
 from PySide6.QtCore import Qt, QTimer, Slot
 import cv2
 import os
@@ -633,8 +632,8 @@ class MainWindow(QMainWindow):
 
             if blobs:
                 for blob in blobs:
-                    blob[0] += max(y - half_square, 0)
-                    blob[1] += max(x - half_square, 0)
+                    blob[0] += y_start
+                    blob[1] += x_start
                 
                 self.blobs.extend(blobs)
                 self.spots = self.convert_blobs_to_spots(self.blobs)
@@ -642,6 +641,7 @@ class MainWindow(QMainWindow):
                     self.spot_image, self.blobs, self.data_directory)
 
                 self.status_bar.showMessage("Spot added successfully.")
+                self.image_display.set_mouse_press_callback(None)
                 return
 
         QMessageBox.information(
@@ -650,6 +650,7 @@ class MainWindow(QMainWindow):
 
     def remove_spot_at(self, x, y):
         if not self.blobs:
+            self.image_display.set_mouse_press_callback(None)
             return
         
         closest_blob = min(
