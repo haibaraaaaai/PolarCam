@@ -62,7 +62,6 @@ class ImageProcessor(QObject):
                     print(f"Blobs {i} and {j} overlap.")
 
     def generate_highlighted_image(self, image, blobs, output_directory):
-        # Display the image with detected spots
         fig_display, ax_display = plt.subplots(figsize=(10, 10))
         ax_display.imshow(image, cmap='gray', vmin=0, vmax=255)
         for blob in blobs:
@@ -75,23 +74,24 @@ class ImageProcessor(QObject):
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
         
         fig_display.canvas.draw()
-        buffer_display = np.frombuffer(fig_display.canvas.tostring_rgb(), dtype=np.uint8)
-        buffer_display = buffer_display.reshape(fig_display.canvas.get_width_height()[::-1] + (3,))
+        buffer_display = np.frombuffer(
+            fig_display.canvas.tostring_rgb(), dtype=np.uint8)
+        buffer_display = buffer_display.reshape(
+            fig_display.canvas.get_width_height()[::-1] + (3,))
 
         height, width, _ = buffer_display.shape
-        qimage = QImage(buffer_display.data, width, height, 3 * width, QImage.Format_RGB888)
-        
-        # Directly display the image using OpenCV to verify
+        qimage = QImage(
+            buffer_display.data, width, height, 
+            3 * width, QImage.Format_RGB888)
+
         cv2.imshow('Highlighted Image', buffer_display)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-        print("Emitting processed image signal...")
         self.image_processed.emit(qimage)
         
-        plt.close(fig_display)  # Close figure after updating display
+        plt.close(fig_display)
 
-        # Save the image with axes, titles, and grid
         fig_save, ax_save = plt.subplots(figsize=(10, 10))
         ax_save.imshow(image, cmap='gray', vmin=0, vmax=255)
         ax_save.set_title("Detected Blobs with Laplacian of Gaussian")

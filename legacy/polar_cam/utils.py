@@ -61,7 +61,6 @@ def configure_device_component(node_map_remote_device, camera_error):
         except Exception as e:
             camera_error.emit(f"Warning: Error Setting Component: {e}")
 
-
 def fetch_camera_parameters(node_map_remote_device, parameters, camera_error):
     try:
         param_names = [
