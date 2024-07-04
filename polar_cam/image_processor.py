@@ -62,52 +62,40 @@ class ImageProcessor(QObject):
                     print(f"Blobs {i} and {j} overlap.")
 
     def generate_highlighted_image(self, image, blobs, output_directory):
-        fig_display, ax_display = plt.subplots(figsize=(10, 10))
-        ax_display.imshow(image, cmap='gray', vmin=0, vmax=255)
-        for blob in blobs:
+        height, width = image.shape[:2]
+
+        dpi = 100
+        fig = plt.figure(
+            frameon=False, figsize=(width / dpi, height / dpi), dpi=dpi)
+
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+
+        ax.imshow(image, cmap='gray', aspect='auto', vmin=0, vmax=255)
+        for index, blob in enumerate(blobs):
             y, x, r = blob
             c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
-            ax_display.add_patch(c)
-        ax_display.axis('off')
-        ax_display.set_xticks([])
-        ax_display.set_yticks([])
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        
-        fig_display.canvas.draw()
-        buffer_display = np.frombuffer(
-            fig_display.canvas.tostring_rgb(), dtype=np.uint8)
-        buffer_display = buffer_display.reshape(
-            fig_display.canvas.get_width_height()[::-1] + (3,))
+            ax.add_patch(c)
+            ax.text(
+                x + r, y, str(index), color='yellow', 
+                fontsize=30, ha='left', va='center'
+            )
 
-        height, width, _ = buffer_display.shape
+        fig.canvas.draw()
+
+        buffer = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        buffer = buffer.reshape((height, width, 3))
         qimage = QImage(
-            buffer_display.data, width, height, 
-            3 * width, QImage.Format_RGB888)
-
-        cv2.imshow('Highlighted Image', buffer_display)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+            buffer.data, width, height, 3 * width, QImage.Format_RGB888)
 
         self.image_processed.emit(qimage)
-        
-        plt.close(fig_display)
-
-        fig_save, ax_save = plt.subplots(figsize=(10, 10))
-        ax_save.imshow(image, cmap='gray', vmin=0, vmax=255)
-        ax_save.set_title("Detected Blobs with Laplacian of Gaussian")
-        ax_save.set_xlabel("X-axis")
-        ax_save.set_ylabel("Y-axis")
-        ax_save.grid(True)
-
-        for blob in blobs:
-            y, x, r = blob
-            c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
-            ax_save.add_patch(c)
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         filename = os.path.join(output_directory, f'blobs_{timestamp}.png')
-        plt.savefig(filename, bbox_inches='tight', pad_inches=0)
-        plt.close(fig_save)
+        fig.savefig(filename, bbox_inches='tight', pad_inches=0, dpi=dpi)
+
+        plt.close(fig)
 
     def extract_polar_inten(self, image, roi):
         x, y, width, height = roi['x'], roi['y'], roi['width'], roi['height']
