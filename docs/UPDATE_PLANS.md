@@ -6,6 +6,5 @@ scale. (10s at spot 1, 10s at spot 2, then jump back to spot 1, etc...)
 5. Mark spots with spot id? And keep the list until re-detect spot to remove 
 non-rotating spot after scan.
 6. Change print to status bar info.
-7. Check out a working version for cold experiment.
-8. 2c7ca989c4ba43f617402f080ae198099e754ea0
-I think this commit is working.
+7. resize image.
+8. ax_display? and is there a way to only draw circle once?

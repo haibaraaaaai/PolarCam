@@ -570,12 +570,8 @@ class MainWindow(QMainWindow):
         num_sigma = int(self.num_sigma_input.text())
         threshold = float(self.threshold_input.text())
 
-        print(f"Detecting spots")
-
         blobs = self.image_processor.detect_spots(
             self.spot_image, min_sigma, max_sigma, num_sigma, threshold)
-
-        print(f"Detected {len(blobs)} spots")
 
         self.image_processor.generate_highlighted_image(
             self.spot_image, blobs, self.data_directory)
@@ -1026,7 +1022,8 @@ class MainWindow(QMainWindow):
         self.camera_control.acquisition_stopped.connect(
             self.on_acquisition_stopped)
         self.camera_control.frame_captured.connect(self.on_frame_captured)
-        self.image_processor.image_processed.connect(self.image_display.on_image_received)
+        self.image_processor.image_processed.connect(
+            self.image_display.on_image_received)
 
     def closeEvent(self, event):
         self.cleanup()
