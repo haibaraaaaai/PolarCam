@@ -1026,6 +1026,7 @@ class MainWindow(QMainWindow):
         self.camera_control.acquisition_stopped.connect(
             self.on_acquisition_stopped)
         self.camera_control.frame_captured.connect(self.on_frame_captured)
+        self.image_processor.image_processed.connect(self.image_display.on_image_received)
 
     def closeEvent(self, event):
         self.cleanup()
