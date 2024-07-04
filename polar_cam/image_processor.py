@@ -1,6 +1,8 @@
 import cv2
 import os
 import numpy as np
+from PySide6.QtGui import QImage
+from PySide6.QtCore import QObject, Signal
 from skimage.feature import blob_log
 from skimage import exposure
 import matplotlib.pyplot as plt
@@ -9,8 +11,11 @@ matplotlib.use('Agg')
 import datetime
 from polar_cam.utils import blobs_overlap
 
-class ImageProcessor:
+class ImageProcessor(QObject):
+    image_processed = Signal(QImage)
+    
     def __init__(self, display):
+        super().__init__()
         self.display = display
 
     def preprocess_image(self, image):
@@ -60,7 +65,6 @@ class ImageProcessor:
         # Display the image with detected spots
         fig_display, ax_display = plt.subplots(figsize=(10, 10))
         ax_display.imshow(image, cmap='gray', vmin=0, vmax=255)
-        # Ensure grayscale image
         for blob in blobs:
             y, x, r = blob
             c = plt.Circle((x, y), r, color='red', linewidth=2, fill=False)
@@ -71,29 +75,25 @@ class ImageProcessor:
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
         
         fig_display.canvas.draw()
-        buffer_display = np.frombuffer(
-            fig_display.canvas.tostring_rgb(), dtype=np.uint8)
-        buffer_display = buffer_display.reshape(
-            fig_display.canvas.get_width_height()[::-1] + (3,))
+        buffer_display = np.frombuffer(fig_display.canvas.tostring_rgb(), dtype=np.uint8)
+        buffer_display = buffer_display.reshape(fig_display.canvas.get_width_height()[::-1] + (3,))
 
-        # Convert BGR to RGB
-        buffer_display_rgb = cv2.cvtColor(buffer_display, cv2.COLOR_BGR2RGB)
-
+        height, width, _ = buffer_display.shape
+        qimage = QImage(buffer_display.data, width, height, 3 * width, QImage.Format_RGB888)
+        
         # Directly display the image using OpenCV to verify
-        cv2.imshow('Highlighted Image', buffer_display_rgb)
+        cv2.imshow('Highlighted Image', buffer_display)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-        print("Updating display with highlighted image...")
-        self.display.update_display(buffer_display_rgb)
-        print("Display updated.")
+        print("Emitting processed image signal...")
+        self.image_processed.emit(qimage)
         
         plt.close(fig_display)  # Close figure after updating display
 
         # Save the image with axes, titles, and grid
         fig_save, ax_save = plt.subplots(figsize=(10, 10))
         ax_save.imshow(image, cmap='gray', vmin=0, vmax=255)
-        # Ensure grayscale image
         ax_save.set_title("Detected Blobs with Laplacian of Gaussian")
         ax_save.set_xlabel("X-axis")
         ax_save.set_ylabel("Y-axis")

@@ -23,21 +23,12 @@ class Display(QGraphicsView):
         self.update()
         print("Display updated with new image.")
 
-    def update_display(self, image):
+    def update_display(self, qimage):
         print("Update display called.")
-        if len(image.shape) == 3:
-            height, width, _ = image.shape
-            bytes_per_line = 3 * width
-            qimage = QImage(image.data, width, 
-                            height, bytes_per_line, QImage.Format_RGB888)
-        else:
-            height, width = image.shape
-            bytes_per_line = width
-            qimage = QImage(image.data, width, 
-                            height, bytes_per_line, QImage.Format_Grayscale8)
-        print("Converted numpy array to QImage.")
         self.on_image_received(qimage)
-        self.repaint()
+        self._scene.invalidate(QRectF(), QGraphicsScene.BackgroundLayer)  # Force full scene update
+        self.viewport().update()  # Ensure the viewport is fully redrawn
+        self.repaint()  # Force redraw of the entire display
         print("Display repaint called.")
 
     def set_mouse_press_callback(self, callback):
@@ -56,8 +47,9 @@ class CustomGraphicsScene(QGraphicsScene):
         else:
             print(f"Image set to scene size: {image.width()}x{image.height()}")
         self._image = image
+        self.clear()  # Clear the scene to remove old items
         self.invalidate(QRectF(), QGraphicsScene.BackgroundLayer)
-        self.update()
+        self.update(QRectF())  # Ensure full scene update
         print("Scene image updated.")
 
     def drawBackground(self, painter: QPainter, rect: QRectF):
@@ -74,8 +66,7 @@ class CustomGraphicsScene(QGraphicsScene):
         print(f"Display size: {display_width}x{display_height}")
         print(f"Image size: {image_width}x{image_height}")
 
-        coords = calculate_image_rect(
-            display_width, display_height, image_width, image_height)
+        coords = calculate_image_rect(display_width, display_height, image_width, image_height)
         if coords is not None:
             image_pos_x, image_pos_y, image_width, image_height = coords
             rect = QRectF(image_pos_x, image_pos_y, image_width, image_height)
