@@ -8,6 +8,7 @@ import cv2
 import os
 import numpy as np
 import time
+import matplotlib.pyplot as plt
 from polar_cam.image_display import Display
 from polar_cam.utils import adjust_for_increment, adjust_rectangle
 
@@ -605,24 +606,60 @@ class MainWindow(QMainWindow):
     def on_add_spot(self):
         if self.camera_control.acquisition_running:
             self.toggle_acquisition()
-        
-        self.image_display.set_mouse_press_callback(self.add_spot_at)
+
         self.status_bar.showMessage("Click on the image to add a spot.")
+        self.display_spot_image()
+
+    def display_spot_image(self):
+        if self.spot_image is not None:
+            self.scale_factor = 0.4
+            scaled_image = cv2.resize(
+                self.spot_image, 
+                (int(self.spot_image.shape[1] * self.scale_factor), 
+                 int(self.spot_image.shape[0] * self.scale_factor))
+            )
+
+            self.fig, self.ax = plt.subplots()
+            self.ax.imshow(scaled_image, cmap='gray')
+            self.fig.canvas.mpl_connect('button_press_event', self.on_click)
+            plt.show()
+
+    def on_click(self, event):
+        if event.xdata is not None and event.ydata is not None:
+            scale_factor = 1 / self.scale_factor
+            x = int(event.xdata * scale_factor)
+            y = int(event.ydata * scale_factor)
+            print(f"Coordinates captured: x={x}, y={y}")
+            self.add_spot_at(x, y)
+            plt.close(self.fig) 
 
     def on_remove_spot(self):
         if self.camera_control.acquisition_running or not self.blobs:
+            QMessageBox.information(
+                self, "Info", "No spots to remove or acquisition running.")
             return
 
-        self.image_display.set_mouse_press_callback(self.remove_spot_at)
-        self.status_bar.showMessage("Click on the spot to remove.")
+        index, ok = QInputDialog.getInt(
+            self, "Remove Spot", "Enter spot index:")
+        if ok:
+            if 0 <= index < len(self.blobs):
+                self.blobs.pop(index)
+                self.spots = self.convert_blobs_to_spots(self.blobs)
+                self.image_processor.generate_highlighted_image(
+                    self.spot_image, self.blobs, self.data_directory)
+                self.status_bar.showMessage(
+                    f"Spot {index} removed successfully.")
+            else:
+                QMessageBox.warning(
+                    self, "Invalid Index", "No spot with the given index.")
 
     def add_spot_at(self, x, y):
         square_size = 32
         half_square = square_size // 2
-        y_start = int(max(y - half_square, 0))
-        y_end = int(min(y + half_square, self.spot_image.shape[0]))
-        x_start = int(max(x - half_square, 0))
-        x_end = int(min(x + half_square, self.spot_image.shape[1]))
+        y_start = max(y - half_square, 0)
+        y_end = min(y + half_square, self.spot_image.shape[0])
+        x_start = max(x - half_square, 0)
+        x_end = min(x + half_square, self.spot_image.shape[1])
         
         roi = self.spot_image[y_start:y_end, x_start:x_end]
 
@@ -641,29 +678,10 @@ class MainWindow(QMainWindow):
                     self.spot_image, self.blobs, self.data_directory)
 
                 self.status_bar.showMessage("Spot added successfully.")
-                self.image_display.set_mouse_press_callback(None)
                 return
 
         QMessageBox.information(
             self, "Info", "No spot detected at the selected location.")
-        self.image_display.set_mouse_press_callback(None)
-
-    def remove_spot_at(self, x, y):
-        if not self.blobs:
-            self.image_display.set_mouse_press_callback(None)
-            return
-        
-        closest_blob = min(
-            self.blobs, key=lambda blob: (blob[1] - x) ** 2 + 
-            (blob[0] - y) ** 2)
-        self.blobs.remove(closest_blob)
-        self.spots = self.convert_blobs_to_spots(self.blobs)
-        
-        self.image_processor.generate_highlighted_image(
-            self.spot_image, self.blobs, self.data_directory)
-        self.status_bar.showMessage("Spot removed successfully.")
-        
-        self.image_display.set_mouse_press_callback(None)
 
     def on_clear_spot_list(self):
         self.blobs.clear()
