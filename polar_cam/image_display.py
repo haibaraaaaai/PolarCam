@@ -8,6 +8,7 @@ class Display(QGraphicsView):
         super().__init__(parent)
         self._scene = CustomGraphicsScene(self)
         self.setScene(self._scene)
+        self.setMouseTracking(True)
         self.mouse_press_callback = None
 
     @Slot(QImage)
@@ -23,6 +24,7 @@ class CustomGraphicsScene(QGraphicsScene):
         super().__init__(parent)
         self._parent = parent
         self._image = QImage()
+        self.im_coord = None
 
     def set_image(self, image: QImage):
         self._image = image
@@ -34,15 +36,15 @@ class CustomGraphicsScene(QGraphicsScene):
         image_width = self._image.width()
         image_height = self._image.height()
 
-        coords = calculate_image_rect(
+        self.im_coord = calculate_image_rect(
             display_width, display_height, image_width, image_height)
-        if coords is not None:
-            image_pos_x, image_pos_y, image_width, image_height = coords
+        if self.im_coord is not None:
+            image_pos_x, image_pos_y, image_width, image_height = self.im_coord
             rect = QRectF(image_pos_x, image_pos_y, image_width, image_height)
             painter.drawImage(rect, self._image)
+            print(f"Image drawn at ({image_pos_x}, {image_pos_y}) with size ({image_width}, {image_height})")
 
     def mousePressEvent(self, event: QMouseEvent):
-        if self._parent.mouse_press_callback:
-            scene_pos = self._parent.mapToScene(event.pos().toPoint())
-            self._parent.mouse_press_callback(scene_pos.x(), scene_pos.y())
+        raw_pos = event.pos().toPoint()
+        print(f"Raw event position: (x, y) = ({raw_pos.x()}, {raw_pos.y()})")
         super().mousePressEvent(event)

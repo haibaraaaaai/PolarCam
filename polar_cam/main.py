@@ -12,10 +12,11 @@ def main():
     display = Display()
     image_processor = ImageProcessor(display)
     data_analyzer = DataAnalyzer()
-    main_window = MainWindow(camera_control, image_processor, data_analyzer)
+    main_window = MainWindow(camera_control, image_processor, data_analyzer, display)
     main_window.show()
     camera_control.initialize_and_start_acquisition()
     sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
+

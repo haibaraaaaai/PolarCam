@@ -1,22 +1,23 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QLineEdit,
     QHBoxLayout, QDockWidget, QFormLayout, QGroupBox, QMessageBox,
-    QStatusBar, QFileDialog, QScrollArea, QApplication, QInputDialog
+    QStatusBar, QFileDialog, QScrollArea, QApplication, QInputDialog, QDialog
 )
 from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtGui import QPixmap, QImage
 import cv2
 import os
 import numpy as np
 import time
-from polar_cam.image_display import Display
 from polar_cam.utils import adjust_for_increment, adjust_rectangle
 
 class MainWindow(QMainWindow):
-    def __init__(self, camera_control, image_processor, data_analyzer):
+    def __init__(self, camera_control, image_processor, data_analyzer, display):
         super().__init__()
         self.camera_control = camera_control
         self.image_processor = image_processor
         self.data_analyzer = data_analyzer
+        self.image_display = display
 
         self.is_recording = False
         self.spots = []
@@ -76,7 +77,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
 
-        self.image_display = Display(self)
         layout.addWidget(self.image_display)
 
         self.setup_parameter_sidebar()
@@ -605,7 +605,7 @@ class MainWindow(QMainWindow):
     def on_add_spot(self):
         if self.camera_control.acquisition_running:
             self.toggle_acquisition()
-        
+
         self.image_display.set_mouse_press_callback(self.add_spot_at)
         self.status_bar.showMessage("Click on the image to add a spot.")
 
@@ -623,8 +623,14 @@ class MainWindow(QMainWindow):
         y_end = int(min(y + half_square, self.spot_image.shape[0]))
         x_start = int(max(x - half_square, 0))
         x_end = int(min(x + half_square, self.spot_image.shape[1]))
-        
+
+        print(f"Clicked position: (x, y) = ({x}, {y})")
+        print(f"ROI coordinates: (x_start, y_start, x_end, y_end) = ({x_start}, {y_start}, {x_end}, {y_end})")
+        print(f"ROI size: width = {x_end - x_start}, height = {y_end - y_start}")
+
         roi = self.spot_image[y_start:y_end, x_start:x_end]
+
+        self.show_roi_popup(roi)
 
         test_params = [(10, 30, 10, 0.3), (5, 40, 5, 0.2), (2, 50, 2, 0.1)]
         for params in test_params:
@@ -647,6 +653,26 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "Info", "No spot detected at the selected location.")
         self.image_display.set_mouse_press_callback(None)
+
+    def show_roi_popup(self, roi):
+        # Ensure ROI is contiguous
+        roi = np.ascontiguousarray(roi)
+
+        # Convert ROI to QImage
+        height, width = roi.shape
+        bytes_per_line = width
+        roi_image = QImage(roi.data, width, height, bytes_per_line, QImage.Format_Grayscale8)
+
+        # Create a dialog to show the ROI
+        dialog = QDialog(self)
+        dialog.setWindowTitle("ROI Preview")
+        layout = QVBoxLayout(dialog)
+
+        label = QLabel()
+        label.setPixmap(QPixmap.fromImage(roi_image))
+        layout.addWidget(label)
+
+        dialog.exec()
 
     def remove_spot_at(self, x, y):
         if not self.blobs:
