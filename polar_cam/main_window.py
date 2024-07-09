@@ -8,7 +8,8 @@ import cv2
 import os
 import numpy as np
 import time
-import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
 from polar_cam.image_display import Display
 from polar_cam.utils import adjust_for_increment, adjust_rectangle
 
@@ -619,10 +620,17 @@ class MainWindow(QMainWindow):
                  int(self.spot_image.shape[0] * self.scale_factor))
             )
 
-            self.fig, self.ax = plt.subplots()
+            self.fig = Figure()
+            self.canvas = FigureCanvasQTAgg(self.fig)
+            self.ax = self.fig.add_subplot(111)
             self.ax.imshow(scaled_image, cmap='gray')
-            self.fig.canvas.mpl_connect('button_press_event', self.on_click)
-            plt.show()
+            self.canvas.mpl_connect('button_press_event', self.on_click)
+
+            self.plot_window = QWidget()
+            plot_layout = QVBoxLayout()
+            plot_layout.addWidget(self.canvas)
+            self.plot_window.setLayout(plot_layout)
+            self.plot_window.show()
 
     def on_click(self, event):
         if event.xdata is not None and event.ydata is not None:
@@ -631,7 +639,7 @@ class MainWindow(QMainWindow):
             y = int(event.ydata * scale_factor)
             print(f"Coordinates captured: x={x}, y={y}")
             self.add_spot_at(x, y)
-            plt.close(self.fig) 
+            self.plot_window.close()
 
     def on_remove_spot(self):
         if self.camera_control.acquisition_running or not self.blobs:
@@ -711,13 +719,13 @@ class MainWindow(QMainWindow):
             self.data_directory, f"Sample {self.sample_counter}")
         os.makedirs(self.sample_folder, exist_ok=True)
 
-        duration, ok = QInputDialog.getInt(
-            self, "Scan Duration", "Enter the scan duration in milliseconds:", 
-            value=10000, min=1000, max=6000000, step=1000
+        duration_seconds, ok = QInputDialog.getInt(
+            self, "Scan Duration", "Enter the scan duration in seconds:", 
+            value=10, minValue=1, maxValue=6000, step=1
         )
 
         if ok:
-            self.scan_duration = duration
+            self.scan_duration = duration_seconds * 1000
             self.process_next_spot()
         else:
             QMessageBox.information(self, "Info", "Spot scanning canceled.")
@@ -972,7 +980,7 @@ class MainWindow(QMainWindow):
         for file in os.listdir(self.sample_folder):
             if file.endswith('_data.npz'):
                 raw_data_file = os.path.join(self.sample_folder, file)
-                data = np.load(raw_data_file)
+                data = np.load(raw_data_file, allow_pickle=True)
                 intensities = data['intensities'].item()
                 timestamps = data['timestamps']
                 spot_id = int(file.split('_')[1])
