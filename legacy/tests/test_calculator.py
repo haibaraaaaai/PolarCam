@@ -24,12 +24,13 @@ def parse_file(file_path):
     return timestamps, c90_values, c45_values, c135_values, c0_values
 
 def parse_npz_file(file_path):
-    data = np.load(file_path)
+    data = np.load(file_path, allow_pickle=True)
     timestamps = data['timestamps']
-    c90_values = data['intensities']['c90']
-    c45_values = data['intensities']['c45']
-    c135_values = data['intensities']['c135']
-    c0_values = data['intensities']['c0']
+    intensities = data['intensities'].item()
+    c90_values = intensities['90']
+    c45_values = intensities['45']
+    c135_values = intensities['135']
+    c0_values = intensities['0']
     
     return timestamps, c90_values, c45_values, c135_values, c0_values
 
