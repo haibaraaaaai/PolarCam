@@ -219,3 +219,24 @@ src/polarcam/
 * Alias guard: fps/4.
 * Hardware: Sensor 2464×2056, ROI width step 4, height step 2, min width 256, min height 2.
 * Polarization layout: `(0,0)=90°`, `(0,1)=45°`, `(1,0)=135°`, `(1,1)=0°`.
+
+---
+
+## 10) History
+
+This repository started as a clean rewrite of
+[`haibaraaaaai/PolarCam`](https://github.com/haibaraaaaai/PolarCam), originally
+as a separate repo rather than a branch. The pre‑rewrite history has since been
+merged back in, so `git log` here contains the commits of **both** projects.
+
+* The old project's files were moved under `legacy/` before merging, so nothing
+  in `src/polarcam/`, `offline/` or `reference_files/` was touched and every
+  pre‑existing commit SHA in this repo is unchanged.
+* `git log --graph` therefore shows more than one root commit — that is
+  expected, not corruption.
+* `git log -- legacy/<path>` and `git blame legacy/<path>` still resolve to the
+  original authors and dates.
+
+`legacy/` is kept for reference only; it is not part of the installable
+package and is not maintained. Deleting it in a future commit would not lose
+any history.
