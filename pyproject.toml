@@ -31,6 +31,17 @@ include = ["polarcam*"]
 [tool.setuptools.package-data]
 "polarcam" = ["**/*.qss", "**/*.ico", "**/*.png"]
 
+# Archived pre-rewrite sources live under legacy/ for reference only and are
+# not maintained, so keep the dev tooling out of them.
+[tool.ruff]
+extend-exclude = ["legacy"]
+
+[tool.black]
+extend-exclude = "^/legacy/"
+
+[tool.mypy]
+exclude = "^legacy/"
+
 # CLI entry point (shows a console on Windows)
 [project.scripts]
 polarcam = "polarcam.cli:main"
