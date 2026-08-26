@@ -1,0 +1,12 @@
+numpy
+PySide6
+scikit-image
+scipy
+matplotlib
+
+# Notebooks under offline/
+jupyterlab
+ipykernel
+
+# IDS peak SDK wheels must be installed separately after the IDS peak Cockpit:
+#   python -m pip install --no-deps ids-peak ids-peak-ipl
